@@ -13,6 +13,15 @@ export const PDF_EXPORT_ROOT_SELECTOR = '.agency-report-view'
 export const REPORT_PRINT_CLASS = 'report-print'
 /** Extra class for the on-screen QA preview: fakes the A4 page area so page breaks can be eyeballed. */
 export const REPORT_PRINT_PREVIEW_CLASS = 'report-print-preview'
+/**
+ * Set by the Save-as-PDF button while the print dialog opens: the report is laid out at the A4
+ * content width on screen too, so charts re-measure and redraw at paper size (legible axis labels)
+ * instead of being scaled down from the screen width. Ctrl/Cmd+P cannot wait for that redraw and
+ * keeps the print stylesheet's shrink-to-column fallback.
+ */
+export const REPORT_PRINT_SIZING_CLASS = 'report-print-sizing'
+/** Time for chart libraries to see the new width (ResizeObserver → state → render) before print(). */
+const CHART_REDRAW_MS = 300
 export const REPORT_PRINT_QUERY_PARAM = 'print'
 
 /** True when the URL asks for the print layout on screen (`?print=1`). */
@@ -79,7 +88,18 @@ function nextPaint(win: Window): Promise<void> {
  */
 export async function printReportAsPdf(options: ReportPrintOptions, win: Window = window): Promise<void> {
   const doc = win.document
-  const restore = enterReportPrintMode(options, doc)
+  const restoreMode = enterReportPrintMode(options, doc)
+  const root = doc.documentElement
+  const hadSizing = root.classList.contains(REPORT_PRINT_SIZING_CLASS)
+  root.classList.add(REPORT_PRINT_SIZING_CLASS)
+  const restore = () => {
+    if (!hadSizing) root.classList.remove(REPORT_PRINT_SIZING_CLASS)
+    restoreMode()
+  }
+  await nextPaint(win)
+  await new Promise<void>((resolve) => {
+    win.setTimeout(resolve, CHART_REDRAW_MS)
+  })
   await nextPaint(win)
 
   await new Promise<void>((resolve) => {
@@ -141,6 +161,16 @@ export function sanitizePdfFilenameSegment(value: string): string {
   return slug || 'report'
 }
 
+/**
+ * Tail of an exported file name (PDF title, .pdf, .pptx): the agency on a white-label report,
+ * nothing on a white-label report without an agency name (its client must not read "rankdelta"),
+ * `rankdelta` otherwise.
+ */
+export function reportFileSuffix(branding: { hideAstroSeoFooter?: boolean; agencyName?: string | null } | null | undefined): string {
+  if (!branding?.hideAstroSeoFooter) return 'rankdelta'
+  return branding.agencyName?.trim() ?? ''
+}
+
 /** Build `<ClientName>-<period>-<suffix>` — the suffix is the agency slug on white-label reports. */
 export function buildReportPdfBasename(
   clientName: string,
@@ -150,6 +180,7 @@ export function buildReportPdfBasename(
 ): string {
   const client = sanitizePdfFilenameSegment(clientName)
   const period = `${periodStart}_${periodEnd}`.replace(/[^\d_-]/g, '')
+  if (!suffix.trim()) return `${client}-${period}`
   const tail = sanitizePdfFilenameSegment(suffix).toLowerCase()
   return `${client}-${period}-${tail}`
 }

@@ -451,3 +451,29 @@ export function chunkWidgetsForPrint(widgets: LayoutWidget[]): PrintChunk[] {
   flush()
   return chunks
 }
+
+/** One grid of the rendered report body, kept whole on a page unless it holds a table. */
+export type PrintBlock = { widgets: LayoutWidget[]; splittable: boolean }
+
+/**
+ * The report body as print blocks: a section header glued to the row under it, then every further
+ * row on its own (rows come from reflowRows, so this is exactly how one big grid would place them).
+ * Each block is rendered as its own grid because Chrome ignores `break-inside: avoid` on grid
+ * items: in a single grid, KPI tiles split across two PDF pages.
+ */
+export function printBlocks(widgets: LayoutWidget[]): PrintBlock[] {
+  const blocks: PrintBlock[] = []
+  for (const chunk of chunkWidgetsForPrint(widgets)) {
+    if (chunk.keep.length > 0) blocks.push({ widgets: chunk.keep, splittable: chunk.splittable === true })
+    let row: PrintBlock | null = null
+    for (const w of chunk.rest) {
+      if (!row || row.widgets[0]!.grid.row !== w.grid.row) {
+        row = { widgets: [], splittable: false }
+        blocks.push(row)
+      }
+      row.widgets.push(w)
+      if (w.type === 'table') row.splittable = true
+    }
+  }
+  return blocks
+}

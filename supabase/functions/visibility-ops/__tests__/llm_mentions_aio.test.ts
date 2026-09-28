@@ -50,3 +50,21 @@ Deno.test('40106 with no items is still a failure, and not retried', () => {
   assertFalse(r.ok)
   assertFalse(r.retryable)
 })
+
+// Production 28/09: 18 of 20 AI Overview runs came back like this (no load_async_ai_overview) and
+// were stored as completed runs with an empty answer, i.e. "AI Overviews does not mention the brand".
+Deno.test('an AI Overview whose content was not loaded is a failed run, not an empty answer', () => {
+  const unloaded = { type: 'ai_overview', asynchronous_ai_overview: true, items: null, markdown: null, references: null }
+  const r = parseAioResponse(serp(20000, 'Ok.', [{ type: 'organic' }, unloaded]), true)
+  assertFalse(r.ok)
+  assertFalse(r.retryable)
+  assertEquals(r.errorMessage, 'AI Overview shown but its content was not loaded')
+  assertEquals(r.costUsd, 0.002)
+})
+
+Deno.test('an AI Overview with only markdown still yields the answer text', () => {
+  const md = { type: 'ai_overview', asynchronous_ai_overview: true, items: null, markdown: 'Brewcraft kits are popular.', references: [] }
+  const r = parseAioResponse(serp(20000, 'Ok.', [md]), true)
+  assert(r.ok)
+  assertEquals(r.answerText, 'Brewcraft kits are popular.')
+})

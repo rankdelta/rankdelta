@@ -88,7 +88,7 @@ export function ExecutiveBriefing({ data, accentColor, title }: ExecutiveBriefin
                 <h3 className="text-[11px] font-semibold uppercase tracking-wide text-gray-600">{t(col.labelKey)}</h3>
               </div>
               {col.items.length === 0 ? (
-                <p className="text-xs text-gray-400">{t(col.emptyKey)}</p>
+                <p className="text-xs text-gray-500">{t(col.emptyKey)}</p>
               ) : col.id === 'actions' ? (
                 <ol className="space-y-2">
                   {col.items.map((item, i) => (

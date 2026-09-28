@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { withSectionSummary } from './snapshot'
+import { withCleanNarrative, withSectionSummary } from './snapshot'
 import { hasBaseline } from './reportUi'
 import type { MetricWithDelta } from '../reportBuild/math'
 
@@ -35,5 +35,38 @@ describe('withSectionSummary', () => {
     const disconnected = { data: { summary: { aiSov: { value: null, delta: null, deltaPct: null } }, geo: { data: null, status: 'not_connected' } } }
     expect(withSectionSummary(disconnected)).toBe(disconnected)
     expect(withSectionSummary({ data: null })).toEqual({ data: null })
+  })
+})
+
+// Shapes of shared reports built before the build-side fixes (28/09 sweep); names are fictional.
+describe('withCleanNarrative', () => {
+  it('recovers a summary stored as the raw fenced JSON completion', () => {
+    const raw = '```json { "executiveSummary": "Lo score di salute del sito è 72. Tutte le integrazioni dati risultano non connesse.", "sections": { "site_health": "L\'audit rileva 5 issue.", "backlinks": "Il dato sui link persi non è disponibile (null)." }, "nextActions": ["Correggere il title mancante", "Attivare l\'integrazione con Google Search Console per abilitare il monitoraggio"] } ```'
+    const out = withCleanNarrative({ id: 'r', narrative: { executiveSummary: raw, sections: {}, nextActions: [] } })
+    expect(out.narrative).toEqual({
+      executiveSummary: 'Lo score di salute del sito è 72.',
+      sections: { site_health: "L'audit rileva 5 issue." },
+      nextActions: ['Correggere il title mancante'],
+    })
+  })
+
+  it('drops sentences about the reporting tool from an old narrative, keeps the rest', () => {
+    const out = withCleanNarrative({
+      narrative: {
+        executiveSummary: 'Share of voice reached 30.8%. ChatGPT mentions you most.',
+        sections: { geo: 'ChatGPT leads.' },
+        nextActions: [
+          'Add JSON-LD schema to the 3 pages missing structured data.',
+          "Request Google AI Overviews-specific tracking be added to next month's monitoring, as this engine shows null data.",
+        ],
+      },
+    })
+    expect((out.narrative as { nextActions: string[] }).nextActions).toEqual(['Add JSON-LD schema to the 3 pages missing structured data.'])
+    expect((out.narrative as { executiveSummary: string }).executiveSummary).toBe('Share of voice reached 30.8%. ChatGPT mentions you most.')
+  })
+
+  it('leaves reports without a narrative alone', () => {
+    const report = { id: 'r', narrative: null }
+    expect(withCleanNarrative(report)).toBe(report)
   })
 })

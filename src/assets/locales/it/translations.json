@@ -1328,7 +1328,8 @@
 			"exporting": "Preparazione della presentazione…",
 			"exportError": "Non è stato possibile preparare la presentazione. Riprova tra un istante.",
 			"hint": "Scarica un file .pptx 16:9 da aprire in PowerPoint, Keynote o Google Slides e presentare al cliente.",
-			"closingTitle": "Grazie"
+			"closingTitle": "Grazie",
+			"scorecardFirstReading": "I numeri chiave del periodo. I confronti partono dal prossimo report."
 		},
 				"series": {
 			"sov": "Share of voice",
@@ -1396,7 +1397,9 @@
 			"mentions_other": "{{count}} menzioni",
 			"noMentions": "mai menzionato",
 			"moat": "La maggior parte dei report si ferma a Google. Questo mostra anche cosa rispondono {{engines}} quando i vostri clienti chiedono a loro.",
-			"moatGeneric": "La maggior parte dei report si ferma a Google. Questo mostra anche cosa rispondono gli assistenti AI quando i vostri clienti chiedono a loro."
+			"moatGeneric": "La maggior parte dei report si ferma a Google. Questo mostra anche cosa rispondono gli assistenti AI quando i vostri clienti chiedono a loro.",
+			"methodNote_one": "Come si misura: {{engines}} risponde dal modello, senza ricerca web; fonti e tasso di citazione vengono da Perplexity e Google AI Overviews.",
+			"methodNote_other": "Come si misura: {{engines}} rispondono dal modello, senza ricerca web; fonti e tasso di citazione vengono da Perplexity e Google AI Overviews."
 		},
 		"briefing": {
 			"title": "Briefing esecutivo",
@@ -1523,6 +1526,9 @@
 		"copyShareLink": "Copia link",
 		"linkCopied": "Link copiato",
 		"revokeShare": "Disattiva link",
+		"shareDisabled": "Il link cliente di questo report è disattivato: il vecchio link non lo apre più.",
+		"createShareLink": "Crea un nuovo link",
+		"createShareLinkError": "Non è stato possibile creare il nuovo link. Riprova tra poco.",
 		"shareNotEnabled": "Con il piano Agency ogni report ha il suo link per il cliente appena generato.",
 		"customDomainTitle": "Pubblica i report sul tuo dominio (CNAME)",
 		"customDomainStep1": "1. Aggiungi un sottodominio per i report clienti (es. report.tuaagenzia.it).",

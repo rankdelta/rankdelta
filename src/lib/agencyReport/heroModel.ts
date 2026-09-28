@@ -7,6 +7,9 @@ import { hasBaseline } from './reportUi'
 import { isConnectedSection } from './sections'
 import { engineSessions, type AiAttributionSectionData, type GeoSectionData, type ReportData } from './types'
 
+/** Engines queried through their API without web search: answers from the model, never cited sources. */
+const MODEL_ONLY_ENGINES = new Set(['chatgpt', 'openai', 'gemini'])
+
 export const HERO_MAX_PROMPTS = 6
 export const HERO_MAX_SOURCES = 6
 
@@ -18,6 +21,8 @@ export interface HeroModel {
   promptsMissing: string[]
   promptsTotal: number
   engines: Array<{ engine: string; pct: number; sessions: number | null }>
+  /** Measured engines that answer from the model, without web search (so they never cite sources). */
+  modelOnlyEngines: string[]
   citationPct: number | null
   citationDelta: number | null
   citationHasBaseline: boolean
@@ -72,6 +77,9 @@ export function buildHeroModel(data: ReportData | null | undefined): HeroModel |
     promptsMissing,
     promptsTotal: promptsWon.length + promptsMissing.length,
     engines,
+    modelOnlyEngines: (geo.sovByEngine ?? [])
+      .filter((e) => e.sovPercent != null && Number.isFinite(e.sovPercent) && MODEL_ONLY_ENGINES.has(e.engine.toLowerCase()))
+      .map((e) => engineLabel(e.engine)),
     citationPct: geo.citationRate?.value ?? null,
     citationDelta: geo.citationRate?.delta ?? null,
     citationHasBaseline: hasBaseline(geo.citationRate) && !(geo.citationRate?.value === 0 && geo.citationRate?.delta === 0),

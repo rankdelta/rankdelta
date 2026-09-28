@@ -12,6 +12,7 @@ import {
   loadPdfExportDeps,
   PDF_EXPORT_ROOT_SELECTOR,
   printReportAsPdf,
+  reportFileSuffix,
   type ReportPrintOptions,
 } from '../../lib/agencyReport/pdfExport'
 import { fmtPeriodRange } from '../../lib/agencyReport/reportUi'
@@ -38,12 +39,12 @@ export function ReportPdfDownloadButton({
 
   const name = clientName?.trim() || report.project_name?.trim() || t('resultsPage.yourSiteFallback')
 
-  const printOptions = useMemo<ReportPrintOptions>(() => {
+  const branding = useMemo(() => {
     const raw = report.branding
-    const branding = getWhiteLabelBranding(
-      raw && typeof raw === 'object' ? { metadata: { white_label_report: raw } } : null,
-      isAgency,
-    )
+    return getWhiteLabelBranding(raw && typeof raw === 'object' ? { metadata: { white_label_report: raw } } : null, isAgency)
+  }, [isAgency, report.branding])
+
+  const printOptions = useMemo<ReportPrintOptions>(() => {
     const locale = i18n.language.startsWith('it') ? 'it-IT' : 'en-US'
     const period = fmtPeriodRange(report.period_start, report.period_end, locale)
     const preparedBy = branding.agencyName
@@ -51,13 +52,12 @@ export function ReportPdfDownloadButton({
       : branding.hideAstroSeoFooter
         ? ''
         : t('agencyReport.poweredBy')
-    const suffix = branding.hideAstroSeoFooter && branding.agencyName ? branding.agencyName : 'rankdelta'
     return {
-      documentTitle: buildReportPdfBasename(name, report.period_start, report.period_end, suffix),
+      documentTitle: buildReportPdfBasename(name, report.period_start, report.period_end, reportFileSuffix(branding)),
       footerText: [preparedBy, name, period].filter(Boolean).join(' · '),
       pageLabel: t('agencyReport.print.pageLabel'),
     }
-  }, [i18n.language, isAgency, name, report.branding, report.period_end, report.period_start, t])
+  }, [branding, i18n.language, name, report.period_end, report.period_start, t])
 
   // `?print=1` keeps the print layout on screen (QA); Ctrl/Cmd+P gets the same layout as the button.
   useEffect(() => {
@@ -85,9 +85,9 @@ export function ReportPdfDownloadButton({
     const root = document.querySelector(PDF_EXPORT_ROOT_SELECTOR)
     if (!(root instanceof HTMLElement)) return
     const deps = await loadPdfExportDeps()
-    const filename = buildReportPdfFilename(name, report.period_start, report.period_end)
+    const filename = buildReportPdfFilename(name, report.period_start, report.period_end, reportFileSuffix(branding))
     await exportReportDomToPdf(root, filename, deps)
-  }, [name, report.period_end, report.period_start])
+  }, [branding, name, report.period_end, report.period_start])
 
   const handleDownload = useCallback(async () => {
     setExporting(true)

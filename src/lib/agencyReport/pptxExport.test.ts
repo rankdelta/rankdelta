@@ -6,6 +6,8 @@ import type { WhiteLabelReportBranding } from '../whiteLabelReport'
 import {
   buildReportDeck,
   buildReportDeckFilename,
+  clip,
+  clipSentences,
   deckVisibleText,
   planReportDeck,
   renderReportDeck,
@@ -224,6 +226,8 @@ describe('planReportDeck', () => {
     expect(closing.kind === 'closing' && closing.lines).toEqual(['Preparato da Studio Nord'])
     expect(buildReportDeckFilename('Acme CRM', '2026-08-01', '2026-08-28', agencyBranding)).toBe('Acme-CRM-2026-08-01_2026-08-28-studio-nord.pptx')
     expect(buildReportDeckFilename('Acme CRM', '2026-08-01', '2026-08-28', null)).toBe('Acme-CRM-2026-08-01_2026-08-28-rankdelta.pptx')
+    // White-label without an agency name: no brand in the file name at all.
+    expect(buildReportDeckFilename('Acme CRM', '2026-08-01', '2026-08-28', { ...agencyBranding, agencyName: null })).toBe('Acme-CRM-2026-08-01_2026-08-28.pptx')
   })
 
   it('splits impressions onto a second chart only when they dwarf clicks', () => {
@@ -261,9 +265,9 @@ describe('planReportDeck — what real agencies have (GEO only, GSC only)', () =
     return input({ data: r.data, narrative: r.narrative, branding: r.branding, goals: r.goals, sections: r.sections, projectName: 'Cliente', websiteUrl: 'https://cliente.it', period: { start: r.period_start, end: r.period_end } })
   }
 
-  it('GEO-only: AI slide, scorecard, health + issues table; no Google, GA4, rankings or backlinks slide', () => {
+  it('GEO-only: AI slide, scorecard, health score beside the issues table; no Google, GA4, rankings or backlinks slide', () => {
     const plan = planReportDeck(geoOnly(), tEn)
-    expect(kinds(plan.slides)).toEqual(['cover', 'briefing', 'ai', 'prompts', 'scorecard', 'scorecard', 'table', 'list', 'closing'])
+    expect(kinds(plan.slides)).toEqual(['cover', 'briefing', 'ai', 'prompts', 'scorecard', 'health', 'list', 'closing'])
     const text = deckVisibleText(plan)
     expect(text).not.toMatch(/Google Search Console|Google Analytics|Rankings|Referring domains/)
     // Competitors: a real count or "not mentioned yet" — never a bare name, never a 0.
@@ -276,12 +280,22 @@ describe('planReportDeck — what real agencies have (GEO only, GSC only)', () =
     expect(text).not.toMatch(/google_aio|chatgpt\b|\+100|undefined|NaN/)
   })
 
-  it('GEO-only: the issues slide carries the audit table with priority labels and page counts', () => {
+  it('GEO-only: the health slide carries the score and the audit table with priority labels and page counts', () => {
     const plan = planReportDeck(geoOnly(), tEn)
-    const issues = plan.slides.find((s) => s.kind === 'table' && s.title === 'What is holding the site back')
-    expect(issues && issues.kind === 'table' && issues.table.columns.map((c) => c.label)).toEqual(['Issue', 'Pages', 'Priority'])
-    expect(issues && issues.kind === 'table' && issues.table.rows.map((r) => [r[1], r[2]])).toEqual([['4', 'Medium'], ['5', 'Opportunity']])
-    expect(issues && issues.kind === 'table' && issues.table.rows[0]?.[0]).toContain('Poco testo rispetto al codice')
+    const health = plan.slides.find((s) => s.kind === 'health') as Extract<DeckSlide, { kind: 'health' }>
+    expect(health.title).toBe('Site health')
+    expect(health.tile.value).toMatch(/^\d+\/100$/)
+    expect(health.table.title).toBe('What is holding the site back')
+    expect(health.table.columns.map((c) => c.label)).toEqual(['Issue', 'Pages', 'Priority'])
+    expect(health.table.rows.map((r) => [r[1], r[2]])).toEqual([['4', 'Medium'], ['5', 'Opportunity']])
+    expect(health.table.rows[0]?.[0]).toContain('Poco testo rispetto al codice')
+  })
+
+  it('GEO-only first reading: "At a glance" does not promise a comparison it cannot show', () => {
+    const plan = planReportDeck(geoOnly(), tEn)
+    const scorecard = plan.slides.find((s) => s.kind === 'scorecard') as Extract<DeckSlide, { kind: 'scorecard' }>
+    const compared = scorecard.tiles.some((x) => x.movement && x.movement.tone !== 'muted')
+    expect(scorecard.subtitle).toBe(compared ? 'The key numbers, compared with the previous period.' : 'The key numbers for this period. Comparisons start with the next report.')
   })
 
   it('GSC-only: Search Console slides only, locale numbers, count movements without a unit', () => {
@@ -348,5 +362,72 @@ describe('buildReportDeck', () => {
     const pptx = renderReportDeck(plan, FakePptx as unknown as typeof import('pptxgenjs').default)
     expect(pptx.layout).toBe('LAYOUT_WIDE')
     expect(calls).toHaveLength(plan.slides.length)
+  })
+})
+
+describe('slide text never stops mid-word', () => {
+  // The AI summary of the Rankdelta.ai report (28/09) ended on the briefing slide as "…limiting AI citation ra…".
+  const summary =
+    'This period marks the first measurable AI-search presence for your brand, with a 30.8% share of voice across 16 tracked AI engine runs. ' +
+    'ChatGPT cites you most frequently at 33.3% SOV, followed by Perplexity at 28.6%. ' +
+    'The gap is stark: you appear in comparison prompts like "Rankdelta.ai vs Onelittleweb" but not in "best AI SEO software." ' +
+    'Your site health score of 84 is solid, but four GEO-specific issues are directly limiting AI citation rates, which currently sit at 0%.'
+
+  it('clip cuts at a word boundary, and hard-cuts only a long unbroken token', () => {
+    expect(clip('Structured data missing on the product pages', 30)).toBe('Structured data missing on…')
+    expect(clip('short', 30)).toBe('short')
+    expect(clip('/blog/2026/09/a-very-long-slug-without-any-space-at-all', 20)).toBe('/blog/2026/09/a-ver…')
+  })
+
+  it('clipSentences keeps whole sentences; decimals and domains are not sentence ends', () => {
+    const out = clipSentences(summary, 300)
+    expect(out).toBe(
+      'This period marks the first measurable AI-search presence for your brand, with a 30.8% share of voice across 16 tracked AI engine runs. ' +
+        'ChatGPT cites you most frequently at 33.3% SOV, followed by Perplexity at 28.6%.',
+    )
+    expect(clipSentences(summary, 2000)).toBe(summary)
+    // Not even one sentence fits: word-boundary clip.
+    expect(clipSentences(summary, 60)).toBe('This period marks the first measurable AI-search presence…')
+  })
+
+  it('the briefing slide shows whole sentences and keeps the full summary in the speaker notes', () => {
+    const long = `${summary} ${summary}`
+    const plan = planReportDeck(input({ narrative: { executiveSummary: long, sections: {}, nextActions: [] } }), tEn)
+    const briefing = plan.slides.find((s) => s.kind === 'briefing') as Extract<DeckSlide, { kind: 'briefing' }>
+    expect(briefing.lead!.length).toBeLessThanOrEqual(720)
+    expect(briefing.lead).toMatch(/[.!?]["”]?$/)
+    expect(briefing.notes).toContain(long)
+  })
+})
+
+describe('deck slides that would read as empty', () => {
+  it('"At a glance" says comparisons start next time when no tile has a previous period', () => {
+    const first = (value: number) => ({ value, delta: null, deltaPct: null })
+    const noBaseline: ReportData = {
+      ...fullData,
+      summary: { ...fullData.summary!, healthScore: first(84), aiSov: first(30.8), avgPosition: m(null, null), gscClicks: m(null, null), ga4Sessions: m(null, null), ga4AiAssistantSessions: m(null, null) },
+    }
+    const plan = planReportDeck(input({ data: noBaseline, sections: ['summary'] }), tEn)
+    const scorecard = plan.slides.find((s) => s.kind === 'scorecard') as Extract<DeckSlide, { kind: 'scorecard' }>
+    expect(scorecard.subtitle).toBe('The key numbers for this period. Comparisons start with the next report.')
+    const it = planReportDeck(input({ data: noBaseline, sections: ['summary'], locale: 'it-IT' }), tIt)
+    const itScorecard = it.slides.find((s) => s.kind === 'scorecard') as Extract<DeckSlide, { kind: 'scorecard' }>
+    expect(itScorecard.subtitle).toBe('I numeri chiave del periodo. I confronti partono dal prossimo report.')
+    // With a previous period the usual subtitle stays.
+    const full = planReportDeck(input(), tEn).slides.find((s) => s.kind === 'scorecard') as Extract<DeckSlide, { kind: 'scorecard' }>
+    expect(full.subtitle).toBe('The key numbers, compared with the previous period.')
+  })
+
+  it('keeps health + backlinks tiles on their own slide and the issues on the next one', () => {
+    const plan = planReportDeck(input(), tEn)
+    expect(kinds(plan.slides)).not.toContain('health')
+  })
+
+  it('renders the health slide (tile beside the table) without throwing', async () => {
+    const r = harborstayReport()
+    const plan = planReportDeck(input({ data: r.data, narrative: r.narrative, branding: r.branding, goals: null, sections: r.sections }), tEn)
+    const blob = await buildReportDeck(input({ data: r.data, narrative: r.narrative, branding: r.branding, goals: null, sections: r.sections, logoData: null }), tEn)
+    expect(plan.slides.some((s) => s.kind === 'health')).toBe(true)
+    expect(blob.size).toBeGreaterThan(10_000)
   })
 })

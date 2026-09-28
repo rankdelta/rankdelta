@@ -21,7 +21,7 @@ import type { WhiteLabelReportBranding } from '../whiteLabelReport'
 import { connectedButEmpty } from './emptyStates'
 import { buildHeroModel, HERO_MAX_PROMPTS } from './heroModel'
 import { deriveBriefing, briefingIsEmpty, movementPct } from './insights'
-import { buildReportPdfBasename } from './pdfExport'
+import { buildReportPdfBasename, reportFileSuffix } from './pdfExport'
 import { rankDistributionCounts, splitMovers } from './rankings'
 import {
   derivePeriodHeadline,
@@ -129,6 +129,7 @@ export type DeckSlide =
     }
   | { kind: 'prompts'; title: string; subtitle: string | null; columns: DeckListColumn[]; footnote: string | null; notes: string | null }
   | { kind: 'scorecard'; title: string; subtitle: string; tiles: DeckTile[]; notes: string | null }
+  | { kind: 'health'; title: string; subtitle: string; tile: DeckTile; table: DeckTable; notes: string | null }
   | { kind: 'metrics'; title: string; subtitle: string; tiles: DeckTile[]; charts: DeckChart[]; table: DeckTable | null; notes: string | null }
   | { kind: 'table'; title: string; subtitle: string | null; table: DeckTable; notes: string | null }
   | { kind: 'rankings'; title: string; subtitle: string; tile: DeckTile; chart: DeckChart | null; chartCaption: string | null; movers: DeckTable[]; notes: string | null }
@@ -153,9 +154,31 @@ const MAX_TABLE_ROWS = 8
 const MAX_MOVERS = 4
 const DEFAULT_ACCENT = '#7c3aed'
 
-function clip(s: string, max: number): string {
+/** At most `max` characters, cut at a word boundary (a slide never shows half a word) plus "…". */
+export function clip(s: string, max: number): string {
   const v = s.trim()
-  return v.length > max ? `${v.slice(0, max - 1).trimEnd()}…` : v
+  if (v.length <= max) return v
+  const head = v.slice(0, max - 1)
+  const space = head.search(/\s\S*$/)
+  // A long unbroken token (URL, path) has no usable boundary: cut it where it is.
+  const cut = space >= max * 0.6 ? head.slice(0, space) : head
+  return `${cut.replace(/[\s,;:.\-–—(]+$/, '')}…`
+}
+
+/**
+ * Prose (AI summary, next actions): the whole sentences that fit in `max`, so a slide reads as a
+ * finished paragraph. Falls back to a word-boundary clip when not even the first sentence fits.
+ */
+export function clipSentences(s: string, max: number): string {
+  const v = s.trim()
+  if (v.length <= max) return v
+  let end = -1
+  // A sentence ends at . ! ? (plus any closing quote or bracket) before a capital or a digit;
+  // "30.8%" and "Rankdelta.ai" are not sentence ends.
+  for (const m of v.slice(0, max + 4).matchAll(/[.!?…]["'”’)\]]*(?=\s+["“'‘(]?[\p{Lu}\d])/gu)) {
+    if (m.index + m[0].length <= max) end = m.index + m[0].length
+  }
+  return end >= max * 0.4 ? v.slice(0, end) : clip(v, max)
 }
 
 function narrativeFor(narrative: ReportNarrative | null, key: string): string | null {
@@ -263,13 +286,15 @@ function briefingSlide(ctx: Ctx): DeckSlide | null {
         { label: t('agencyReport.briefing.watch'), tone: 'bad', items: items(briefing.watch), note: briefing.watch.length ? null : t('agencyReport.briefing.noWatch') },
         { label: t('agencyReport.briefing.actions'), tone: 'accent', items: items(briefing.actions), numbered: true, note: briefing.actions.length ? null : t('agencyReport.briefing.noActions') },
       ]
+  const shownLead = lead ? clipSentences(lead, columns.length ? 720 : 1400) : null
   return {
     kind: 'briefing',
     title: t('agencyReport.briefing.title'),
     subtitle: t('agencyReport.briefing.subtitle'),
-    lead: lead ? clip(lead, columns.length ? 720 : 1400) : null,
+    lead: shownLead,
     columns,
-    notes: notesFor(data, narrative, 'summary'),
+    // The slide may show only the first sentences; the presenter keeps the whole summary.
+    notes: [shownLead !== lead ? lead : null, notesFor(data, narrative, 'summary')].filter(Boolean).join('\n\n') || null,
   }
 }
 
@@ -344,7 +369,12 @@ function aiSlides(ctx: Ctx): DeckSlide[] {
       caption,
       tiles,
       chart,
-      chartCaption: chart ? t('agencyReport.hero.enginesCaption') : null,
+      chartCaption: [
+        chart ? t('agencyReport.hero.enginesCaption') : null,
+        model.modelOnlyEngines.length > 0
+          ? t('agencyReport.hero.methodNote', { engines: model.modelOnlyEngines.join(locale.startsWith('it') ? ' e ' : ' and '), count: model.modelOnlyEngines.length })
+          : null,
+      ].filter(Boolean).join(' ') || null,
       competitors,
       notes: notesFor(data, narrative, 'geo'),
     },
@@ -410,10 +440,12 @@ function scorecardSlide(ctx: Ctx): DeckSlide | null {
     })
   }
   if (tiles.length === 0) return null
+  // "Compared with the previous period" only when at least one tile has a previous period to compare with.
+  const compared = tiles.some((x) => x.movement && x.movement.tone !== 'muted')
   return {
     kind: 'scorecard',
     title: t('agencyReport.scorecardTitle'),
-    subtitle: t('agencyReport.sectionDesc.summary'),
+    subtitle: t(compared ? 'agencyReport.sectionDesc.summary' : 'agencyReport.deck.scorecardFirstReading'),
     tiles: tiles.slice(0, 6),
     notes: notesFor(data, narrative, 'summary'),
   }
@@ -568,8 +600,8 @@ function rankingsSlide(ctx: Ctx): DeckSlide | null {
   }
 }
 
-/** "What is holding the site back": the audit's top issues, the same table the report shows under the score. */
-function siteIssuesSlide(ctx: Ctx): DeckSlide | null {
+/** "What is holding the site back": the audit's top issues, the same table the report shows beside the score. */
+function siteIssuesTable(ctx: Ctx): DeckTable | null {
   const { t, locale, data } = ctx
   if (!ctx.enabled.has('site_health') || !isConnectedSection<SiteHealthSectionData>(data.site_health) || connectedButEmpty(data, 'site_health')) return null
   const issues = (data.site_health.topIssues ?? []).filter(isSiteHealthIssue).slice(0, MAX_TABLE_ROWS)
@@ -578,8 +610,8 @@ function siteIssuesSlide(ctx: Ctx): DeckSlide | null {
     const severity = typeof raw === 'string' && raw.trim() ? raw.trim().toLowerCase() : 'info'
     return t(`agencyReport.siteIssues.severity_${severity}`, { defaultValue: severity })
   }
-  const table: DeckTable = {
-    title: null,
+  return {
+    title: t('agencyReport.siteIssues.title'),
     columns: [
       { label: t('agencyReport.siteIssues.issue'), align: 'left', width: 7.4 },
       { label: t('agencyReport.siteIssues.pages'), align: 'right', width: 1.3 },
@@ -591,10 +623,9 @@ function siteIssuesSlide(ctx: Ctx): DeckSlide | null {
       severityLabel(issue.severity),
     ]),
   }
-  return { kind: 'table', title: t('agencyReport.siteIssues.title'), subtitle: t('agencyReport.sections.site_health'), table, notes: null }
 }
 
-function healthSlide(ctx: Ctx): DeckSlide | null {
+function healthSlide(ctx: Ctx): Extract<DeckSlide, { kind: 'scorecard' }> | null {
   const { t, locale, data, goals, narrative } = ctx
   const tiles: DeckTile[] = []
   const subtitles: string[] = []
@@ -629,10 +660,26 @@ function healthSlide(ctx: Ctx): DeckSlide | null {
   return { kind: 'scorecard', title: titles.join(' · '), subtitle: subtitles.join(' '), tiles, notes: notes.length ? notes.join('\n\n') : null }
 }
 
+/**
+ * Site health (and backlinks). When the audit score is the only tile, it sits beside the audit's
+ * issues on one slide, as in the report; a lone tile on a slide of its own read as an empty slide.
+ */
+function healthSlides(ctx: Ctx): DeckSlide[] {
+  const scorecard = healthSlide(ctx)
+  const issues = siteIssuesTable(ctx)
+  const tile = scorecard?.tiles.length === 1 ? scorecard.tiles[0] : undefined
+  if (scorecard && tile && issues) {
+    return [{ kind: 'health', title: scorecard.title, subtitle: scorecard.subtitle, tile, table: issues, notes: scorecard.notes }]
+  }
+  const slides: DeckSlide[] = scorecard ? [scorecard] : []
+  if (issues) slides.push({ kind: 'table', title: issues.title ?? '', subtitle: ctx.t('agencyReport.sections.site_health'), table: { ...issues, title: null }, notes: null })
+  return slides
+}
+
 function nextStepsSlide(ctx: Ctx): DeckSlide | null {
   const { t, narrative } = ctx
   // Real next actions run 250-350 characters: keep the sentence, let the renderer pick the size.
-  const items = (narrative?.nextActions ?? []).filter((a) => typeof a === 'string' && a.trim()).map((a) => clip(a, 420))
+  const items = (narrative?.nextActions ?? []).filter((a) => typeof a === 'string' && a.trim()).map((a) => clipSentences(a, 420))
   if (items.length === 0) return null
   return { kind: 'list', title: t('agencyReport.nextActions'), subtitle: t('agencyReport.sectionDesc.nextActions'), items: items.slice(0, 8), notes: null }
 }
@@ -670,8 +717,7 @@ export function planReportDeck(input: ReportDeckInput, t: DeckTranslate): DeckPl
   push(gscSlides(ctx))
   push(ga4Slide(ctx))
   push(rankingsSlide(ctx))
-  push(healthSlide(ctx))
-  push(siteIssuesSlide(ctx))
+  push(healthSlides(ctx))
   push(nextStepsSlide(ctx))
 
   const lines: string[] = []
@@ -717,6 +763,11 @@ export function deckVisibleText(plan: DeckPlan): string {
       case 'scorecard':
         out.push(s.title, s.subtitle)
         s.tiles.forEach(tile)
+        break
+      case 'health':
+        out.push(s.title, s.subtitle)
+        tile(s.tile)
+        table(s.table)
         break
       case 'metrics':
         out.push(s.title, s.subtitle)
@@ -1069,6 +1120,14 @@ function renderMetrics(pptx: PptxGenJS, slide: Slide, plan: DeckPlan, s: Extract
   })
 }
 
+/** Site health: the score on the left, the audit's issues beside it (the report's own layout). */
+function renderHealth(slide: Slide, plan: DeckPlan, s: Extract<DeckSlide, { kind: 'health' }>) {
+  header(slide, plan.accent, null, s.title, s.subtitle)
+  const leftW = 3.4
+  tile(slide, plan.accent, M, BODY_Y, leftW, 2.3, s.tile)
+  table(slide, plan.accent, s.table, M + leftW + 0.5, BODY_Y, CW - leftW - 0.5, { fontSize: 12, rowH: 0.42 })
+}
+
 function renderTable(slide: Slide, plan: DeckPlan, s: Extract<DeckSlide, { kind: 'table' }>) {
   header(slide, plan.accent, s.subtitle, s.title)
   table(slide, plan.accent, { ...s.table, title: null }, M, BODY_Y, CW, { fontSize: 13, rowH: 0.5 })
@@ -1143,6 +1202,9 @@ export function renderReportDeck(plan: DeckPlan, Ctor: typeof PptxGenJS = PptxGe
       case 'scorecard':
         renderScorecard(slide, plan, s)
         break
+      case 'health':
+        renderHealth(slide, plan, s)
+        break
       case 'metrics':
         renderMetrics(pptx, slide, plan, s)
         break
@@ -1194,8 +1256,7 @@ export async function loadLogoData(url: string | null | undefined, timeoutMs = 6
 
 /** `<client>-<period>-<agency|rankdelta>.pptx`, same slug rules as the PDF. */
 export function buildReportDeckFilename(clientName: string, periodStart: string, periodEnd: string, branding: WhiteLabelReportBranding | null): string {
-  const suffix = branding?.hideAstroSeoFooter && branding.agencyName ? branding.agencyName : 'rankdelta'
-  return `${buildReportPdfBasename(clientName, periodStart, periodEnd, suffix)}.pptx`
+  return `${buildReportPdfBasename(clientName, periodStart, periodEnd, reportFileSuffix(branding))}.pptx`
 }
 
 /** Build the .pptx as a Blob (browser and node). The logo is fetched here and skipped on failure. */

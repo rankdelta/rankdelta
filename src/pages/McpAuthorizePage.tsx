@@ -6,25 +6,42 @@
  */
 import { useMemo } from 'react';
 import { mcpOAuthIssuerUrl } from '../services/apiKeys';
+import { describeRedirect } from '../lib/mcpConsent';
 
 const PASSTHROUGH = ['client_id', 'redirect_uri', 'state', 'code_challenge'] as const;
 
 export function McpAuthorizePage({ search = typeof window !== 'undefined' ? window.location.search : '' }: { search?: string }) {
 	const params = useMemo(() => new URLSearchParams(search), [search]);
 	const error = params.get('error');
+	const client = describeRedirect(params.get('redirect_uri'));
 	const action = `${mcpOAuthIssuerUrl()}/authorize`;
 
 	return (
 		<div className="min-h-screen flex items-center justify-center bg-[#080808] p-6 text-white">
 			<div className="w-full max-w-[420px] rounded-[20px] border border-white/10 bg-white/[0.03] p-7">
 				<h1 className="mb-2 text-[22px] font-semibold">Connect Rankdelta</h1>
-				<p className="text-sm leading-relaxed text-white/55">
-					An AI assistant is requesting access to your SEO and AI-visibility tools. Paste a personal API key from{' '}
+				<p className="text-sm leading-relaxed text-white/55" data-testid="mcp-consent-client">
+					{client ? (
+						<>
+							<span className="font-semibold text-white">{client.app}</span>
+							{client.app !== client.host && <span className="text-white/45"> ({client.host})</span>} is requesting access to your SEO
+							and AI-visibility tools.
+						</>
+					) : (
+						'An AI assistant is requesting access to your SEO and AI-visibility tools.'
+					)}{' '}
+					Paste a personal API key from{' '}
 					<a href="/settings" target="_blank" rel="noopener" className="text-violet-300">
 						Settings → API &amp; MCP
 					</a>
 					.
 				</p>
+				{client && (
+					<p className="mt-3 rounded-[10px] border border-amber-400/20 bg-amber-400/[0.06] px-3 py-2.5 text-xs leading-relaxed text-amber-200/80" data-testid="mcp-consent-warning">
+						Continue only if you started this connection yourself in {client.app === client.host ? client.host : client.app}. If
+						someone sent you this link, close this page: whoever set up the connection would get access to your account.
+					</p>
+				)}
 				{error && (
 					<p role="alert" className="mt-4 rounded-[10px] bg-red-900/30 px-3 py-2.5 text-sm text-red-300">
 						{error}

@@ -5,7 +5,7 @@
 import { supabase } from '../lib/supabaseClient'
 import type { ClientReportSnapshot, GscAiOverviewRow, ReportData, ReportGoals } from '../lib/agencyReport/types'
 import type { ReportHistoryRow } from '../lib/agencyReport/history'
-import { withSectionSummary } from '../lib/agencyReport/snapshot'
+import { withCleanNarrative, withSectionSummary } from '../lib/agencyReport/snapshot'
 import type { ReportLayout } from '../lib/agencyReport/layout'
 import type { SectionKey } from '../lib/agencyReport/sections'
 import type { WhiteLabelReportBranding } from '../lib/whiteLabelReport'
@@ -112,7 +112,7 @@ export async function fetchClientReportById(reportId: string): Promise<ClientRep
     .eq('id', reportId)
     .maybeSingle()
   if (error) throw error
-  return data ? withSectionSummary(data as ClientReportSnapshot) : null
+  return data ? withCleanNarrative(withSectionSummary(data as ClientReportSnapshot)) : null
 }
 
 /** Mirrors get_shared_report SQL guard — avoids RPC for obviously invalid tokens. */
@@ -125,7 +125,18 @@ export async function fetchSharedReport(token: string): Promise<ClientReportSnap
   if (!isValidShareToken(token)) return null
   const { data, error } = await supabase.rpc('get_shared_report', { p_token: token })
   if (error) throw error
-  return data ? withSectionSummary(data as ClientReportSnapshot) : null
+  return data ? withCleanNarrative(withSectionSummary(data as ClientReportSnapshot)) : null
+}
+
+/** A fresh client link for a report (report-build issues it: clients may clear a token, never set one). */
+export async function reshareReport(reportId: string): Promise<string> {
+  const { data, error } = await supabase.functions.invoke<{ ok?: boolean; error?: string; report?: { share_token?: string | null } }>('report-build', {
+    body: { action: 'reshare', reportId },
+  })
+  if (error) throw error
+  const token = data?.report?.share_token
+  if (!token) throw new Error(data?.error ?? 'reshare_failed')
+  return token
 }
 
 export async function revokeReportShare(reportId: string): Promise<void> {

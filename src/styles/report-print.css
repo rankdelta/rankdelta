@@ -34,11 +34,14 @@ html.report-print body {
   background: #fff !important;
 }
 
-/* The report itself becomes the whole page: no card chrome, full page-area width. */
+/* The report itself becomes the whole page: no card chrome, full page-area width. The @page
+   margins are the only margins (the on-screen card padding would add 10 mm on every side and push
+   the executive summary off page 1). */
 html.report-print .agency-report-view {
   max-width: none !important;
   width: auto !important;
   margin: 0 !important;
+  padding: 0 !important;
   border-radius: 0 !important;
   box-shadow: none !important;
   -webkit-print-color-adjust: exact;
@@ -63,10 +66,11 @@ html.report-print .agency-report-view * {
   transition: none !important;
 }
 
-/* Cover alone on page 1. */
+/* The cover flows into the briefing (a forced page break left page 1 about 70% blank); it is
+   never split. */
 html.report-print .agency-report-cover {
-  break-after: page;
-  page-break-after: always;
+  break-inside: avoid;
+  page-break-inside: avoid;
 }
 
 /* Never split a widget, section or KPI group across two pages. */
@@ -97,6 +101,34 @@ html.report-print .pdf-export-splittable {
 html.report-print .pdf-keep-together-splittable {
   break-inside: auto;
   page-break-inside: auto;
+}
+/* Charts are drawn at the on-screen width; on paper (narrower) they scale to their column instead
+   of spilling out of their card. Nivo: the viewBox is kept by ChartFrame; Recharts (Tremor) has one. */
+/* Nivo's measuring layers are 0 px wide: give them the column so the chart can size against it.
+   The chart keeps its own height (an auto height would feed back into Nivo's measurement). */
+html.report-print .agency-report-view .report-chart > div,
+html.report-print .agency-report-view .report-chart > div > div,
+html.report-print .agency-report-view .recharts-wrapper {
+  width: 100% !important;
+}
+/* Shrink only: a chart never grows (and gets taller) on paper, it just stops at its column. */
+html.report-print .agency-report-view .report-chart svg,
+html.report-print .agency-report-view .recharts-surface {
+  display: block;
+  max-width: 100% !important;
+  height: auto !important;
+}
+/* The AI-visibility hero with long question lists ran just past one page: on paper it is set a notch
+   tighter (padding, list type, section gaps) so it stays on one page. */
+html.report-print [data-testid="ai-visibility-hero"] {
+  padding: 20px !important;
+}
+html.report-print [data-testid="ai-visibility-hero"] li {
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+html.report-print [data-testid="ai-visibility-hero"] .mt-6 {
+  margin-top: 14px !important;
 }
 /* Issue table: the "why" line under each issue stays small, the pages column never wraps. */
 html.report-print .agency-report-view table td .text-xs {
@@ -159,8 +191,13 @@ html.report-print .agency-report-footer {
   border-top: 1px solid #e5e7eb;
 }
 
-/* On-screen preview (`?print=1`): mimic the A4 page area so page-break behaviour can be eyeballed. */
+/* On-screen preview (`?print=1`): mimic the A4 page area so page-break behaviour can be eyeballed.
+   Save as PDF (report-print-sizing) uses the same width while the dialog opens, so charts redraw at
+   paper size before the print snapshot. */
 @media screen {
+  html.report-print-sizing .agency-report-view {
+    width: 186mm !important;
+  }
   html.report-print-preview .agency-report-view {
     width: 186mm !important;
     margin: 12mm auto !important;

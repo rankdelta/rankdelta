@@ -1,3 +1,4 @@
+import { useEffect, useRef, type ReactNode } from 'react'
 import { ResponsiveBar } from '@nivo/bar'
 import { ResponsiveLine } from '@nivo/line'
 import { ResponsivePie } from '@nivo/pie'
@@ -12,6 +13,38 @@ const CHART_THEME = {
   tooltip: {
     container: { background: '#fff', color: '#111827', fontSize: 12, borderRadius: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
   },
+}
+
+/**
+ * Nivo draws its SVG at the on-screen pixel width, without a viewBox, and never re-measures for
+ * print: on paper (narrower than the screen) a chart spilled out of its card into the next one.
+ * Keeping viewBox = the drawn size lets the print stylesheet scale the chart to its column
+ * (html.report-print .report-chart in report-print.css); on screen nothing changes.
+ */
+function ChartFrame({ height, label, children }: { height: number; label: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const root = ref.current
+    if (!root || typeof MutationObserver === 'undefined') return
+    const sync = () => {
+      for (const svg of root.querySelectorAll('svg')) {
+        const w = svg.getAttribute('width')
+        const h = svg.getAttribute('height')
+        if (w && h && svg.getAttribute('viewBox') !== `0 0 ${w} ${h}`) svg.setAttribute('viewBox', `0 0 ${w} ${h}`)
+        // Nivo marks the chart role="img" without a name: screen readers get the series it plots.
+        if (svg.getAttribute('role') === 'img' && svg.getAttribute('aria-label') !== label) svg.setAttribute('aria-label', label)
+      }
+    }
+    sync()
+    const observer = new MutationObserver(sync)
+    observer.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['width', 'height'] })
+    return () => observer.disconnect()
+  }, [label])
+  return (
+    <div ref={ref} className="report-chart" style={{ height }}>
+      {children}
+    </div>
+  )
 }
 
 const VIOLET = '#7c3aed'
@@ -61,7 +94,7 @@ export function NivoLineChart({
         <div>
           {valueKeys.map((key, i) => (
             <div key={key}>
-              <p className="text-[10px] font-medium uppercase tracking-wide text-gray-400 mb-0.5">{seriesLabels?.[key] ?? key}</p>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-gray-500 mb-0.5">{seriesLabels?.[key] ?? key}</p>
               <NivoLineChart
                 data={data}
                 indexKey={indexKey}
@@ -90,7 +123,7 @@ export function NivoLineChart({
     data: data.map((d) => ({ x: String(d[indexKey] ?? ''), y: d[key] == null ? null : Number(d[key]) })),
   }))
   return (
-    <div style={{ height }}>
+    <ChartFrame height={height} label={valueKeys.map((k) => seriesLabels?.[k] ?? k).join(' / ')}>
       <ResponsiveLine
         data={series}
         margin={{ top: 8, right: 28, bottom: hideBottomAxis ? 8 : 28, left: 44 }}
@@ -109,7 +142,7 @@ export function NivoLineChart({
         theme={CHART_THEME}
         useMesh
       />
-    </div>
+    </ChartFrame>
   )
 }
 
@@ -126,7 +159,7 @@ export function NivoBarChart({
 }) {
   if (!data.length) return null
   return (
-    <div style={{ height }}>
+    <ChartFrame height={height} label={keys.join(' / ')}>
       <ResponsiveBar
         data={data as Array<Record<string, string | number>>}
         keys={keys}
@@ -139,7 +172,7 @@ export function NivoBarChart({
         enableLabel={false}
         theme={CHART_THEME}
       />
-    </div>
+    </ChartFrame>
   )
 }
 
@@ -152,7 +185,7 @@ export function NivoPieChart({
 }) {
   if (!data.length) return null
   return (
-    <div style={{ height }}>
+    <ChartFrame height={height} label={data.map((d) => d.label).join(' / ')}>
       <ResponsivePie
         data={data}
         margin={{ top: 8, right: 8, bottom: 8, left: 8 }}
@@ -164,6 +197,6 @@ export function NivoPieChart({
         arcLabelsSkipAngle={20}
         theme={CHART_THEME}
       />
-    </div>
+    </ChartFrame>
   )
 }

@@ -16,6 +16,8 @@ import {
   printReportAsPdf,
   REPORT_PRINT_CLASS,
   REPORT_PRINT_PREVIEW_CLASS,
+  REPORT_PRINT_SIZING_CLASS,
+  reportFileSuffix,
   sanitizePdfFilenameSegment,
 } from './pdfExport'
 
@@ -282,6 +284,15 @@ describe('print path', () => {
     expect(buildReportPdfBasename('Acme Corp', '2025-01-01', '2025-01-31', 'Studio Rossi & Co.')).toBe(
       'Acme-Corp-2025-01-01_2025-01-31-studio-rossi-co',
     )
+    expect(buildReportPdfBasename('Acme Corp', '2025-01-01', '2025-01-31', '')).toBe('Acme-Corp-2025-01-01_2025-01-31')
+  })
+
+  it('never files a white-label report under "rankdelta", even without an agency name', () => {
+    expect(reportFileSuffix(null)).toBe('rankdelta')
+    expect(reportFileSuffix({ hideAstroSeoFooter: false, agencyName: 'Studio Nord' })).toBe('rankdelta')
+    expect(reportFileSuffix({ hideAstroSeoFooter: true, agencyName: 'Studio Nord' })).toBe('Studio Nord')
+    expect(reportFileSuffix({ hideAstroSeoFooter: true, agencyName: null })).toBe('')
+    expect(reportFileSuffix({ hideAstroSeoFooter: true, agencyName: '  ' })).toBe('')
   })
 
   it('detects ?print=1', () => {
@@ -320,8 +331,10 @@ describe('print path', () => {
   it('printReportAsPdf enters print mode, calls window.print, and restores on afterprint', async () => {
     const listeners = new Map<string, () => void>()
     const print = vi.fn(() => {
-      // The print layout must be active while the engine snapshots the page.
+      // The print layout must be active while the engine snapshots the page, at paper width so the
+      // charts have redrawn at paper size.
       expect(document.documentElement.classList.contains(REPORT_PRINT_CLASS)).toBe(true)
+      expect(document.documentElement.classList.contains(REPORT_PRINT_SIZING_CLASS)).toBe(true)
       listeners.get('afterprint')?.()
     })
     const win = {
@@ -329,7 +342,11 @@ describe('print path', () => {
       print,
       addEventListener: (type: string, fn: () => void) => listeners.set(type, fn),
       removeEventListener: (type: string) => listeners.delete(type),
-      setTimeout: vi.fn(),
+      // Run the short chart-redraw wait; never the 60 s afterprint fallback.
+      setTimeout: vi.fn((cb: () => void, ms: number) => {
+        if (ms < 1000) cb()
+        return 0
+      }),
       requestAnimationFrame: (cb: () => void) => {
         cb()
         return 0
@@ -340,6 +357,7 @@ describe('print path', () => {
 
     expect(print).toHaveBeenCalledTimes(1)
     expect(document.documentElement.classList.contains(REPORT_PRINT_CLASS)).toBe(false)
+    expect(document.documentElement.classList.contains(REPORT_PRINT_SIZING_CLASS)).toBe(false)
     expect(listeners.has('afterprint')).toBe(false)
   })
 

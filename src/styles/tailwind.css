@@ -228,8 +228,8 @@
   /* Agency report print layout */
   @media print {
     .agency-report-cover {
-      break-after: page;
-      page-break-after: always;
+      break-inside: avoid;
+      page-break-inside: avoid;
     }
     .agency-report-section {
       break-inside: avoid-page;

@@ -134,6 +134,17 @@ export function parseAioResponse(j: Json, httpOk: boolean): ProviderAnswer & { r
     const txt = (el as Json)['text'];
     if (typeof txt === 'string' && txt.trim()) parts.push(txt.trim());
   }
+  const markdown = aio['markdown'];
+  if (parts.length === 0 && typeof markdown === 'string' && markdown.trim()) parts.push(markdown.trim());
+  // Google showed an AI Overview but its content never reached us (loaded asynchronously and not
+  // fetched): we did not see the answer, so it must not count as "the brand is not mentioned".
+  if (parts.length === 0 && !Array.isArray(aio['references'])) {
+    return {
+      ok: false, answerText: '', cited: [], costUsd,
+      errorMessage: 'AI Overview shown but its content was not loaded',
+      sourceLabel: 'google_serp_aio', raw: j, retryable: false,
+    };
+  }
   const refs = (aio['references'] as Json[]) || [];
   const cited = refs.map((r) => {
     const ro = r as Json;
@@ -151,7 +162,9 @@ async function fetchProviderAnswer(
   // ── Google AI Overviews → DataForSEO SERP (organic/live/advanced exposes the ai_overview block) ──
   if (prov === 'google_aio') {
     const cred = btoa(`${ctx.login}:${ctx.pass}`);
-    const task = [{ keyword: queryText, language_code: ctx.languageCode, location_code: ctx.locationCode, device: 'desktop', os: 'windows', depth: 20 }];
+    // load_async_ai_overview: without it DataForSEO only returns AI Overviews from its cache, and most
+    // arrive empty ("asynchronous_ai_overview": true). +$0.002 per SERP, refunded when not needed.
+    const task = [{ keyword: queryText, language_code: ctx.languageCode, location_code: ctx.locationCode, device: 'desktop', os: 'windows', depth: 20, load_async_ai_overview: true }];
     let spent = 0;
     let parsed: ProviderAnswer & { retryable?: boolean } = { ok: false, answerText: '', cited: [], costUsd: 0, errorMessage: 'not run', sourceLabel: 'google_serp_aio', raw: {} };
     for (let attempt = 0; attempt < 2; attempt++) {

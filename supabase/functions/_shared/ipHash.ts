@@ -5,6 +5,7 @@
  * secret key (SHA-256 with a fixed label), so it is never a public constant and never throws.
  */
 import { secretKey } from './supabaseKeys.ts'
+import { ipRateLimitBucket } from './clientIp.ts'
 
 const DERIVED_PEPPER_LABEL = 'rankdelta:ip-hash-pepper:v1'
 
@@ -28,7 +29,10 @@ export async function ipHashPepper(): Promise<string> {
   return await sha256Hex(`${DERIVED_PEPPER_LABEL}:${secretKey()}`)
 }
 
-/** SHA-256 hex of `${pepper}:${ip}`. Deterministic, so per-IP rate limits keep working. */
+/**
+ * SHA-256 hex of `${pepper}:${bucket}`, where the bucket is the IPv4 address or the IPv6 /64
+ * (ipRateLimitBucket). Deterministic, so per-IP rate limits keep working.
+ */
 export async function hashClientIp(ip: string): Promise<string> {
-  return await sha256Hex(`${await ipHashPepper()}:${ip}`)
+  return await sha256Hex(`${await ipHashPepper()}:${ipRateLimitBucket(ip)}`)
 }

@@ -36,7 +36,7 @@ import { assertPayingPlan, planRequiredResponse, resolveCaller, resolveInternalR
 import { extractReferringDomainRows } from '../_shared/linkIntersect.ts'
 import { isAllowedDataForSeoEndpoint } from '../_shared/dataForSeoEndpoints.ts'
 import { extractKeywordMetricRows } from '../_shared/keywordMetricsCache.ts'
-import { getClientIp } from '../_shared/clientIp.ts'
+import { getClientIp, ipRateLimitBucket } from '../_shared/clientIp.ts'
 import { assertSafeOutboundUrl, cachedLookup, resolveSafeRedirectTarget } from '../_shared/ssrf.ts'
 import { secretKey } from '../_shared/supabaseKeys.ts'
 import { allowedBrowserOrigins } from '../_shared/appOrigin.ts'
@@ -225,7 +225,7 @@ Deno.serve(async (req: Request) => {
   const admin = adminClient()
 
   const clientIp = getClientIp(req)
-  if (rateLimited(clientIp)) return json({ error: 'Rate limit exceeded' }, 429, cors)
+  if (rateLimited(ipRateLimitBucket(clientIp))) return json({ error: 'Rate limit exceeded' }, 429, cors)
 
   // Read with a hard size cap so a giant payload can't be forced through.
   let raw: string

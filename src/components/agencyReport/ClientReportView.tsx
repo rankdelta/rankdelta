@@ -1,6 +1,6 @@
 import { useMemo, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AreaChart, BarChart } from '@tremor/react'
+import { AreaChart, BarChart } from './lazyCharts'
 import { isConnectedSection, type SectionKey } from '../../lib/agencyReport/sections'
 import { engineLabel } from '../../lib/agencyReport/insights'
 import {
@@ -181,6 +181,11 @@ export function ClientReportView({
   }
 
   const displayUrl = (websiteUrl ?? '').replace(/^https?:\/\//, '')
+  const scorecardKpis = SCORECARD_KPIS.filter(({ key }) => {
+    const metric = data.summary?.[key]
+    if (!metric || typeof metric !== 'object' || !('value' in metric)) return false
+    return !readOnly || metric.value != null
+  })
 
   const renderConnect = (section: SectionKey) => (
     <ConnectPrompt message={t(SECTION_CONNECT_KEYS[section])} />
@@ -206,8 +211,8 @@ export function ClientReportView({
       className="agency-report-view relative mx-auto max-w-[820px] bg-white text-gray-900 rounded-2xl print:my-0 print:rounded-none shadow-xl print:shadow-none"
       style={{ '--report-accent': branding.primaryColor } as CSSProperties}
     >
-      {/* Cover / hero — own print page */}
-      <header className="agency-report-cover pdf-export-group pdf-export-cover px-4 sm:px-10 pt-4 sm:pt-10 pb-8 print:break-after-page">
+      {/* Cover / hero */}
+      <header className="agency-report-cover pdf-export-group pdf-export-cover px-4 sm:px-10 pt-4 sm:pt-10 pb-8">
         <div
           className="rounded-2xl border border-gray-200 bg-gradient-to-br from-white to-gray-50 p-5 sm:p-8 print:border-gray-300"
           style={{ borderLeftWidth: 4, borderLeftColor: branding.primaryColor }}
@@ -240,7 +245,7 @@ export function ClientReportView({
                 </p>
               )}
               {readOnly && (
-                <p className="text-[11px] text-gray-400 mt-2">{t('agencyReport.readOnlyHint', { date: createdLabel })}</p>
+                <p className="text-[11px] text-gray-500 mt-2">{t('agencyReport.readOnlyHint', { date: createdLabel })}</p>
               )}
             </div>
           </div>
@@ -276,14 +281,15 @@ export function ClientReportView({
           </div>
         )}
 
-        {/* At-a-glance scorecard */}
-        {enabled.has('summary') && data.summary && (
+        {/* At-a-glance scorecard. The client view shows only KPIs with a value: a row of "—" tiles
+            for sources the agency never connected reads as broken, not as "not tracked". */}
+        {enabled.has('summary') && data.summary && scorecardKpis.length > 0 && (
           <section aria-label={t('agencyReport.scorecardTitle')} className="pdf-export-group mb-8 print:break-inside-avoid">
             <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
               {t('agencyReport.scorecardTitle')}
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-              {SCORECARD_KPIS.map(({ key, goalKey, labelKey, positiveIsGood, format }) => {
+              {scorecardKpis.map(({ key, goalKey, labelKey, positiveIsGood, format }) => {
                 const metric = data.summary![key]
                 if (!metric || typeof metric !== 'object' || !('value' in metric)) return null
                 const vs = historyCtx.compareWithPrevious ? scorecardVsReport(history, report.id, key, metric) : null
@@ -620,7 +626,7 @@ export function ClientReportView({
                   targetLabel={t('agencyReport.goal')}
                 />
                 {auditedOn(siteHealth.auditedAt) && (
-                  <p className="mt-2 text-xs text-gray-400">{auditedOn(siteHealth.auditedAt)}</p>
+                  <p className="mt-2 text-xs text-gray-500">{auditedOn(siteHealth.auditedAt)}</p>
                 )}
                 {(siteHealth.topIssues ?? []).some(isSiteHealthIssue) && (
                   <div className="mt-5">
@@ -691,7 +697,7 @@ export function ClientReportView({
           </SectionShell>
         )}
 
-        <footer className="agency-report-footer mt-10 pt-4 border-t border-gray-200 text-[11px] text-gray-400 flex flex-wrap justify-between gap-2 print:fixed print:bottom-0 print:left-0 print:right-0 print:px-10 print:pb-4 print:bg-white">
+        <footer className="agency-report-footer mt-10 pt-4 border-t border-gray-200 text-[11px] text-gray-500 flex flex-wrap justify-between gap-2 print:fixed print:bottom-0 print:left-0 print:right-0 print:px-10 print:pb-4 print:bg-white">
           <span>{t(branding.hideAstroSeoFooter ? 'resultsPage.generatedOn' : 'resultsPage.generatedBy', { date: createdLabel })}</span>
           <span className="font-medium" style={{ color: branding.primaryColor }}>
             {branding.hideAstroSeoFooter ? branding.agencyName ?? '' : branding.agencyName ?? t('agencyReport.poweredBy')}

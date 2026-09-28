@@ -1,4 +1,3 @@
-import { Card, Metric, Text } from '@tremor/react'
 import { useTranslation } from 'react-i18next'
 import type { MetricWithDelta } from '../../lib/reportBuild/math'
 import { evaluateGoalRag, goalProgressRatio } from '../../lib/agencyReport/goals'
@@ -47,9 +46,9 @@ export function ReportKpiCard({
   const showMeta = metric.value != null && (showDelta || (rag !== 'none' && target != null))
 
   return (
-    <Card className="h-full rounded-xl ring-1 ring-gray-200 shadow-none">
-      <Text className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{label}</Text>
-      <Metric className="mt-1 text-2xl font-bold text-gray-900 tabular-nums">{display}</Metric>
+    <div className="relative h-full w-full rounded-xl p-6 text-left ring-1 ring-gray-200">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="mt-1 text-2xl font-bold text-gray-900 tabular-nums">{display}</p>
       {showMeta && (
         <div className="mt-1 flex flex-wrap items-center gap-2">
           {showDelta && (
@@ -81,7 +80,7 @@ export function ReportKpiCard({
         </div>
       )}
       {metric.value != null && <Sparkline values={trend} className="mt-2 h-10 w-full" />}
-      {note && <Text className="mt-1.5 text-[11px] text-gray-400">{note}</Text>}
-    </Card>
+      {note && <p className="mt-1.5 text-[11px] text-gray-500">{note}</p>}
+    </div>
   )
 }

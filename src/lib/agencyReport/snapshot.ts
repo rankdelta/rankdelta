@@ -9,6 +9,7 @@
  * is loaded, so every view, the deck and the PDF agree.
  */
 import type { MetricWithDelta } from '../reportBuild/math'
+import { cleanStoredNarrative } from '../../../supabase/functions/_shared/reportBuild'
 
 function sectionMetric(section: unknown, field: string): MetricWithDelta | null {
   if (!section || typeof section !== 'object') return null
@@ -38,4 +39,16 @@ export function withSectionSummary<T extends { data?: unknown }>(report: T): T {
       },
     },
   }
+}
+
+/**
+ * The stored AI narrative, as the build would write it today. Reports built before the build-side
+ * fixes still carry (a) the model's raw ```json { "executiveSummary": … } ``` completion as the
+ * summary, shown verbatim to the client, and (b) sentences about the reporting tool ("request AI
+ * Overviews tracking", "this engine shows null data"). Same parser and filter as the build.
+ */
+export function withCleanNarrative<T extends { narrative?: unknown }>(report: T): T {
+  const stored = report.narrative
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored)) return report
+  return { ...report, narrative: cleanStoredNarrative(stored as Record<string, unknown>) }
 }

@@ -52,6 +52,10 @@ Deno.test('real SEO work is never mistaken for tool-talk', () => {
     'Fix the 5 pages with thin content that AI engines skip.',
     'Rafforza i link interni verso la pagina degli eventi a Noto.',
     'Your rankings improved on 12 keywords tracked this month.',
+    'Restore the internal links to the events page that the redesign removed.',
+    'Integrate customer reviews on the product pages, where AI answers look for proof.',
+    'Ripristinare i link interni verso la pagina degli eventi.',
+    'Il monitoraggio delle recensioni è una leva per la reputazione.',
   ]) {
     assertEquals(isToolTalk(ok), false, ok)
   }
@@ -117,4 +121,20 @@ Deno.test('the prompt forbids traffic claims without traffic data and causes sta
 Deno.test('the prompt dates a health score from an audit older than the period', () => {
   const { system } = buildNarrativePrompt({}, 'en')
   assert(system.includes('when that date is before meta.periodStart, refer to them as the last audit'))
+})
+
+// Shapes seen in shared reports built before the filter (28/09 sweep); names are fictional.
+Deno.test('stored-report tool-talk: stopped monitoring, raw field names, null, disconnected integrations', () => {
+  for (const bad of [
+    "Request Google AI Overviews inclusion in next month's tracking; the null value there suggests an unmonitored channel.",
+    'Questo mese il monitoraggio GEO è fermo: 0 esecuzioni contro le 15 del periodo precedente (sovOverall a null, delta -100).',
+    'La priorità assoluta è ripristinare il tracciamento GEO e colmare i 5 gap di dati strutturati.',
+    'Attivare il monitoraggio di Google AIO (attualmente null nei dati).',
+    'Tutte le integrazioni dati (Google Search Console, Google Analytics 4) risultano non connesse.',
+    'Nessuna integrazione dati è attiva.',
+    'Il dato sui link persi non è disponibile (null).',
+    'Monitoring stopped this month, so the engine split is empty.',
+  ]) {
+    assert(isToolTalk(bad), bad)
+  }
 })

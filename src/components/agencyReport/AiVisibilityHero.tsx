@@ -1,11 +1,20 @@
 import { useMemo, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
-import { AreaChart } from '@tremor/react'
+import { AreaChart } from './lazyCharts'
 import { CheckCircleIcon, SparklesIcon, XCircleIcon } from '@heroicons/react/24/outline'
 import { buildHeroModel, HERO_MAX_PROMPTS } from '../../lib/agencyReport/heroModel'
 import { fmtAxisDate, fmtPct } from '../../lib/agencyReport/reportUi'
 import type { ReportData } from '../../lib/agencyReport/types'
 import { DeltaChip } from './reportPrimitives'
+import { readableOn } from '../../lib/agencyReport/colorContrast'
+
+const HERO_BG = '#0e0f1d'
+
+/** "ChatGPT", "ChatGPT and Perplexity", "ChatGPT, Gemini e Perplexity". */
+function joinNames(names: string[], locale: string): string {
+  if (names.length < 2) return names[0] ?? ''
+  return `${names.slice(0, -1).join(', ')}${locale === 'it-IT' ? ' e ' : ' and '}${names[names.length - 1]}`
+}
 
 interface AiVisibilityHeroProps {
   data: ReportData | null | undefined
@@ -43,7 +52,7 @@ function ExpandablePromptList({ prompts, max, listClassName }: { prompts: string
           type="button"
           onClick={() => setExpanded((v) => !v)}
           aria-expanded={expanded}
-          className="print:hidden mt-1.5 text-xs font-medium text-white/45 underline-offset-2 hover:text-white/80 hover:underline"
+          className="print:hidden mt-1.5 text-xs font-medium text-white/60 underline-offset-2 hover:text-white/80 hover:underline"
         >
           {expanded ? t('agencyReport.hero.showLess') : t('agencyReport.hero.morePrompts', { count: extra })}
         </button>
@@ -64,13 +73,13 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
   if (!model) return null
 
   const accent = accentColor ?? '#7c3aed'
+  // Accent as text on the dark panel: the brand colour, lightened just enough for WCAG AA.
+  const accentText = readableOn(accent, HERO_BG)
   const heading = title ?? t('agencyReport.hero.title')
   const enginesLine = model.engines.map((e) => e.engine).join(' · ')
   // Name only the engines this report tracks (it used to promise Gemini "and the other assistants").
   const engineNames = model.engines.map((e) => e.engine)
-  const enginesList = engineNames.length > 1
-    ? `${engineNames.slice(0, -1).join(', ')}${locale === 'it-IT' ? ' e ' : ' and '}${engineNames[engineNames.length - 1]}`
-    : engineNames[0] ?? null
+  const enginesList = engineNames.length > 0 ? joinNames(engineNames, locale) : null
   const hasEngineVisits = model.engines.some((e) => e.sessions != null && e.sessions > 0)
   const maxEnginePct = Math.max(1, ...model.engines.map((e) => e.pct))
   const chartRows = model.trend.map((d) => ({
@@ -96,7 +105,7 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
       <div className="relative">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: accent }}>
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em]" style={{ color: accentText }}>
               <SparklesIcon className="h-3.5 w-3.5" aria-hidden />
               {t('agencyReport.hero.eyebrow')}
             </p>
@@ -119,7 +128,7 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
                   <span className="text-white/50">{t('agencyReport.hero.vsPrevious')}</span>
                 </span>
               ) : model.sovPct != null ? (
-                <span className="text-xs text-white/40">{t('agencyReport.hero.firstReading')}</span>
+                <span className="text-xs text-white/60">{t('agencyReport.hero.firstReading')}</span>
               ) : null}
             </div>
             <p className="mt-3 max-w-md text-sm leading-relaxed text-white/70">
@@ -146,7 +155,7 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-white/50">{t('agencyReport.hero.promptsWonShort')}</p>
                     <p className="mt-1 text-xl font-bold tabular-nums">
                       {model.promptsWon.length}
-                      <span className="text-sm font-medium text-white/40">/{model.promptsTotal}</span>
+                      <span className="text-sm font-medium text-white/60">/{model.promptsTotal}</span>
                     </p>
                   </>
                 ) : (
@@ -165,7 +174,7 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
                   )}
                 </p>
                 {model.citationPct != null && model.citationSample && (
-                  <p className="mt-0.5 text-[10px] leading-tight text-white/45" data-testid="hero-citation-sample">
+                  <p className="mt-0.5 text-[10px] leading-tight text-white/60" data-testid="hero-citation-sample">
                     {t('agencyReport.hero.citationSample', { cited: model.citationSample.cited, total: model.citationSample.withSources })}
                   </p>
                 )}
@@ -188,7 +197,7 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
                       <span className="font-medium">{e.engine}</span>
                       <span className="flex items-center gap-2 tabular-nums">
                         {e.sessions != null && e.sessions > 0 && (
-                          <span className="text-[11px] text-white/45">{t('agencyReport.hero.visits', { count: e.sessions })}</span>
+                          <span className="text-[11px] text-white/60">{t('agencyReport.hero.visits', { count: e.sessions })}</span>
                         )}
                         <span className="font-semibold">{fmtPct(e.pct, e.pct >= 10 ? 0 : 1)}</span>
                       </span>
@@ -199,7 +208,7 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
                   </li>
                 ))}
               </ul>
-              <p className="mt-2 text-[11px] text-white/40">{t(hasEngineVisits ? 'agencyReport.hero.enginesCaptionVisits' : 'agencyReport.hero.enginesCaption')}</p>
+              <p className="mt-2 text-[11px] text-white/60">{t(hasEngineVisits ? 'agencyReport.hero.enginesCaptionVisits' : 'agencyReport.hero.enginesCaption')}</p>
             </div>
           )}
         </div>
@@ -213,7 +222,7 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
               max={MAX_PROMPTS * 2}
               listClassName="mt-2 grid grid-cols-1 gap-x-6 gap-y-1.5 md:grid-cols-2"
             />
-            <p className="mt-2 text-[11px] text-white/40">{t('agencyReport.hero.promptSplitUnavailable')}</p>
+            <p className="mt-2 text-[11px] text-white/60">{t('agencyReport.hero.promptSplitUnavailable')}</p>
           </div>
         )}
 
@@ -261,14 +270,14 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
           <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-4" data-testid="hero-branded-prompts">
             <p className="text-xs font-semibold uppercase tracking-wide text-white/50">
               {t('agencyReport.hero.brandedPrompts')}
-              <span className="ml-2 font-medium normal-case tracking-normal text-white/40">
+              <span className="ml-2 font-medium normal-case tracking-normal text-white/60">
                 {t('agencyReport.hero.promptsCount', {
                   count: model.brandedPrompts.filter((p) => p.mentioned).length,
                   total: model.brandedPrompts.length,
                 })}
               </span>
             </p>
-            <p className="mt-1 text-[11px] text-white/40">{t('agencyReport.hero.brandedPromptsHelp')}</p>
+            <p className="mt-1 text-[11px] text-white/60">{t('agencyReport.hero.brandedPromptsHelp')}</p>
             <ul className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1.5 md:grid-cols-2">
               {model.brandedPrompts.slice(0, MAX_PROMPTS).map((p) => (
                 <li key={p.text} className="flex items-start gap-1.5 text-sm text-white/75">
@@ -310,11 +319,11 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
                   {model.sources.map((s) => (
                     <li key={s.domain} className="flex items-center justify-between gap-2 text-sm">
                       <span className="truncate text-white/85">{s.domain}</span>
-                      <span className="shrink-0 text-xs tabular-nums text-white/45">{t('agencyReport.hero.citations', { count: s.count })}</span>
+                      <span className="shrink-0 text-xs tabular-nums text-white/60">{t('agencyReport.hero.citations', { count: s.count })}</span>
                     </li>
                   ))}
                 </ul>
-                <p className="mt-2 text-[11px] text-white/40">{t('agencyReport.hero.sourcesCaption')}</p>
+                <p className="mt-2 text-[11px] text-white/60">{t('agencyReport.hero.sourcesCaption')}</p>
               </div>
             )}
             {model.competitors.length > 0 && model.trend.length <= 1 && model.sources.length === 0 && (
@@ -330,7 +339,12 @@ export function AiVisibilityHero({ data, accentColor, title }: AiVisibilityHeroP
           </div>
         )}
 
-        <p className="mt-5 text-[11px] leading-relaxed text-white/40">{enginesList ? t('agencyReport.hero.moat', { engines: enginesList }) : t('agencyReport.hero.moatGeneric')}</p>
+        <p className="mt-5 text-[11px] leading-relaxed text-white/60">{enginesList ? t('agencyReport.hero.moat', { engines: enginesList }) : t('agencyReport.hero.moatGeneric')}</p>
+        {model.modelOnlyEngines.length > 0 && (
+          <p className="mt-1 text-[11px] leading-relaxed text-white/60" data-testid="hero-method-note">
+            {t('agencyReport.hero.methodNote', { engines: joinNames(model.modelOnlyEngines, locale), count: model.modelOnlyEngines.length })}
+          </p>
+        )}
       </div>
     </section>
   )

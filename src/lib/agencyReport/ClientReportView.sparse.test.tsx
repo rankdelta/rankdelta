@@ -79,6 +79,14 @@ describe('GEO-only report (Harborstay) — legacy path (report saved without a l
     renderClient(legacy())
     expect(screen.queryByText(/referring domains/i)).not.toBeInTheDocument()
   })
+
+  it('shows only the at-a-glance KPIs that have a value, never a row of "—" tiles', () => {
+    renderClient(legacy())
+    const scorecard = screen.getByRole('region', { name: 'At a glance' })
+    expect(within(scorecard).queryByText('—')).not.toBeInTheDocument()
+    expect(within(scorecard).queryByText(/Clicks from Google|Website sessions|Average position/i)).not.toBeInTheDocument()
+    expect(within(scorecard).getByText(/SEO \+ GEO health/i)).toBeInTheDocument()
+  })
 })
 
 describe('GSC-only report — second period, layout path', () => {

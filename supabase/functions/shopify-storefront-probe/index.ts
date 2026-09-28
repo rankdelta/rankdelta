@@ -4,7 +4,7 @@
  * JWT off: the SaaS browser calls this with the anon key, same as the landing probe.
  */
 import { classifyShopifyStorefrontUrl } from '../_shared/shopifyStorefrontFingerprint.ts'
-import { getClientIp } from '../_shared/clientIp.ts'
+import { getClientIp, ipRateLimitBucket } from '../_shared/clientIp.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405)
   const ip = getClientIp(req)
-  if (rateLimited(ip)) return json({ error: 'rate_limited' }, 429)
+  if (rateLimited(ipRateLimitBucket(ip))) return json({ error: 'rate_limited' }, 429)
   let body = {}
   try {
     body = await req.json()

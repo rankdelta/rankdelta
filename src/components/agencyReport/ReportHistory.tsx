@@ -11,7 +11,7 @@ import {
 } from '../../lib/agencyReport/history'
 import { fmtAxisDate, fmtPct, fmtPeriodRange, fmtPosition, fmtWholeNumber } from '../../lib/agencyReport/reportUi'
 import { DeltaChip } from './reportPrimitives'
-import { NivoLineChart } from './widgets/ReportCharts'
+import { NivoLineChart } from './lazyCharts'
 
 const METRIC_LABEL_KEYS: Record<HistoryMetricKey, string> = {
   aiSov: 'agencyReport.shareOfVoice',
@@ -105,7 +105,7 @@ export function ReportPeriodNavigator({ history, currentReportId, compareWithPre
         </button>
         <p className="min-w-0 text-sm text-white/80">
           <span className="font-semibold text-white">{period(current)}</span>
-          <span className="text-white/40"> · {t('agencyReport.history.position', { index: index + 1, count: history.length })}</span>
+          <span className="text-white/60"> · {t('agencyReport.history.position', { index: index + 1, count: history.length })}</span>
         </p>
         <button
           type="button"
@@ -117,7 +117,7 @@ export function ReportPeriodNavigator({ history, currentReportId, compareWithPre
           {t('agencyReport.history.nextReport')} <ArrowRightIcon className="h-3.5 w-3.5" aria-hidden />
         </button>
       </div>
-      <label className={`flex items-center gap-2 text-xs ${previous ? 'cursor-pointer text-white/70' : 'text-white/40'}`}>
+      <label className={`flex items-center gap-2 text-xs ${previous ? 'cursor-pointer text-white/70' : 'text-white/60'}`}>
         <input
           type="checkbox"
           role="switch"
@@ -127,7 +127,7 @@ export function ReportPeriodNavigator({ history, currentReportId, compareWithPre
           onChange={(e) => onCompareChange(e.target.checked)}
         />
         <span>{t('agencyReport.history.compareToggle')}</span>
-        {!previous && <span className="text-white/40">· {t('agencyReport.history.firstReport')}</span>}
+        {!previous && <span className="text-white/60">· {t('agencyReport.history.firstReport')}</span>}
       </label>
     </nav>
   )

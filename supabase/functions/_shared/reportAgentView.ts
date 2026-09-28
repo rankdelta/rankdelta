@@ -4,7 +4,10 @@
  * A stored report carries daily trends, 30-row tables and the raw narrative — too much for a
  * tool result an agent has to reason over. This keeps every section and every KPI, but caps
  * the long arrays (top 10 rows, 31 trend points) so a full report fits in a few thousand tokens.
+ * The narrative is cleaned like the web view's (cleanStoredNarrative): an agent writing the client
+ * email from it must not repeat "request AI Overviews tracking" or a raw JSON completion.
  */
+import { cleanStoredNarrative } from './reportBuild.ts'
 
 export interface ClientReportRowForAgent {
   id: string
@@ -55,7 +58,7 @@ export function shareUrlFor(token: string | null | undefined, appOrigin = 'https
 export function compactClientReport(row: ClientReportRowForAgent, appOrigin = 'https://rankdelta.ai') {
   const data = (row.data ?? {}) as Record<string, unknown>
   const meta = (data.meta ?? {}) as Record<string, unknown>
-  const narrative = (row.narrative ?? {}) as Record<string, unknown>
+  const narrative = cleanStoredNarrative((row.narrative ?? {}) as Record<string, unknown>)
   const { meta: _meta, ...sections } = data
   return {
     id: row.id,

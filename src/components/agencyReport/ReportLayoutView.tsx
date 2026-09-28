@@ -1,7 +1,7 @@
-import { Fragment, useMemo, type CSSProperties } from 'react'
+import { useMemo, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ClientReportSnapshot, ReportData } from '../../lib/agencyReport/types'
-import { GRID_COLUMNS, chunkWidgetsForPrint, reflowRows, sortWidgets, type ReportLayout } from '../../lib/agencyReport/layout'
+import { GRID_COLUMNS, printBlocks, reflowRows, sortWidgets, type PrintBlock, type ReportLayout } from '../../lib/agencyReport/layout'
 import { auditDateBeforePeriod, derivePeriodHeadline } from '../../lib/agencyReport/reportUi'
 import { visibleWidgets, widgetDataState } from '../../lib/agencyReport/widgetData'
 import { getWhiteLabelBranding, type WhiteLabelReportBranding } from '../../lib/whiteLabelReport'
@@ -110,6 +110,20 @@ export function ReportLayoutView({
     </div>
   )
 
+  // Each block is its own grid, kept whole in print (see printBlocks); a block holding a table may continue.
+  const blocks = printBlocks(widgets)
+  const lastBlock = blocks[blocks.length - 1]
+  const renderBlock = (block: PrintBlock, index: number) => (
+    <div
+      key={block.widgets[0]!.id}
+      data-testid="report-print-block"
+      className={block.splittable ? 'pdf-keep-together pdf-keep-together-splittable' : 'pdf-keep-together'}
+      style={{ ...gridStyle, marginTop: index === 0 ? 0 : 12 }}
+    >
+      {block.widgets.map(renderWidget)}
+    </div>
+  )
+
   return (
     <div
       className="agency-report-view mx-auto max-w-[900px] bg-white text-gray-900 rounded-2xl print:my-0 print:rounded-none shadow-xl print:shadow-none p-4 sm:p-10"
@@ -138,35 +152,25 @@ export function ReportLayoutView({
           <p className="mt-4 text-sm text-gray-600 leading-relaxed border-t border-gray-200 pt-4">{periodHeadline}</p>
         )}
         {readOnly && (
-          <p className="text-[11px] text-gray-400 mt-2">{t('agencyReport.readOnlyHint', { date: createdLabel })}</p>
+          <p className="text-[11px] text-gray-500 mt-2">{t('agencyReport.readOnlyHint', { date: createdLabel })}</p>
         )}
       </header>
 
       <div className="mt-6">
-        {chunkWidgetsForPrint(widgets).map((chunk, index) => (
-          <Fragment key={chunk.keep[0]?.id ?? chunk.rest[0]?.id ?? index}>
-            {chunk.keep.length > 0 && (
-              <div className={chunk.splittable ? 'pdf-keep-together pdf-keep-together-splittable' : 'pdf-keep-together'} style={{ ...gridStyle, marginTop: index === 0 ? 0 : 12 }}>
-                {chunk.keep.map(renderWidget)}
-              </div>
-            )}
-            {chunk.rest.length > 0 && (
-              <div style={{ ...gridStyle, marginTop: index === 0 && chunk.keep.length === 0 ? 0 : 12 }}>
-                {chunk.rest.map(renderWidget)}
-              </div>
-            )}
-          </Fragment>
-        ))}
+        {blocks.slice(0, -1).map(renderBlock)}
+        {/* The last block and the closing line share one box, so the line never sits alone on a page. */}
+        <div className={lastBlock?.splittable ? undefined : 'pdf-keep-together'}>
+          {lastBlock && renderBlock(lastBlock, blocks.length - 1)}
+          <footer className="agency-report-endnote pdf-export-group mt-8 pt-4 border-t border-gray-200 text-[11px] text-gray-500 flex flex-wrap justify-between gap-2 print:mt-3 print:pt-2">
+            <span>{t(branding.hideAstroSeoFooter ? 'resultsPage.generatedOn' : 'resultsPage.generatedBy', { date: createdLabel })}</span>
+            <span className="font-medium" style={{ color: branding.primaryColor }}>
+              {[branding.hideAstroSeoFooter ? branding.agencyName : branding.agencyName ?? t('agencyReport.poweredBy'), periodLabel]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
+          </footer>
+        </div>
       </div>
-
-      <footer className="pdf-export-group mt-8 pt-4 border-t border-gray-200 text-[11px] text-gray-400 flex flex-wrap justify-between gap-2 print:mt-6">
-        <span>{t(branding.hideAstroSeoFooter ? 'resultsPage.generatedOn' : 'resultsPage.generatedBy', { date: createdLabel })}</span>
-        <span className="font-medium" style={{ color: branding.primaryColor }}>
-          {[branding.hideAstroSeoFooter ? branding.agencyName : branding.agencyName ?? t('agencyReport.poweredBy'), periodLabel]
-            .filter(Boolean)
-            .join(' · ')}
-        </span>
-      </footer>
     </div>
   )
 }

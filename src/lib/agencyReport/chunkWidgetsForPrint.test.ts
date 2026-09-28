@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chunkWidgetsForPrint, type ReportLayout } from './layout'
+import { chunkWidgetsForPrint, printBlocks, type ReportLayout } from './layout'
 
 type W = ReportLayout['widgets'][number]
 
@@ -42,5 +42,36 @@ describe('chunkWidgetsForPrint', () => {
     expect(chunks[0]?.keep.map((x) => x.id)).toEqual(['h', 'score', 'issues'])
     expect(chunks[0]?.splittable).toBe(true)
     expect(chunks[1]?.splittable).toBeUndefined()
+  })
+})
+
+describe('printBlocks', () => {
+  it('renders the header block, then one block per further row, so print never splits a row of tiles', () => {
+    const blocks = printBlocks([
+      w('summary', 'executive_summary', 0),
+      w('h1', 'section_header', 1),
+      w('k1', 'kpi', 2, 0, 3),
+      w('k2', 'kpi', 2, 3, 3),
+      w('k3', 'kpi', 3, 0, 3),
+      w('k4', 'kpi', 3, 3, 3),
+      w('k5', 'kpi', 3, 6, 3),
+      w('chart', 'line_chart', 4),
+      w('a', 'kpi', 5, 0, 6),
+      w('b', 'table', 5, 6, 6),
+    ])
+    expect(blocks.map((b) => [b.widgets.map((x) => x.id), b.splittable])).toEqual([
+      [['summary'], false],
+      [['h1', 'k1', 'k2'], false],
+      [['k3', 'k4', 'k5'], false],
+      [['chart'], false],
+      [['a', 'b'], true],
+    ])
+  })
+
+  it('keeps a splittable header block splittable and returns nothing for no widgets', () => {
+    expect(printBlocks([])).toEqual([])
+    const blocks = printBlocks([w('h', 'section_header', 0), w('issues', 'table', 1)])
+    expect(blocks).toHaveLength(1)
+    expect(blocks[0]?.splittable).toBe(true)
   })
 })

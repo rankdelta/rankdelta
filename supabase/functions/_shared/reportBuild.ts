@@ -365,13 +365,20 @@ export function parseNarrativeContent(content: unknown): Record<string, unknown>
  * carries the headline number.)
  */
 const TOOL_TALK: RegExp[] = [
-  /\b(add|adding|added|set up|setting up|enable|enabling|request|requesting|configure|configuring|include|including)\b[^.!?]{0,60}\b(tracking|monitoring)\b/i,
+  /\b(add|adding|added|set up|setting up|enable|enabling|request|requesting|configure|configuring|include|including|restore|restoring|resume|resuming|restart|restarting)\b[^.!?]{0,60}\b(tracking|monitoring)\b/i,
+  /\b(tracking|monitoring)\b[^.!?]{0,40}\b(stopped|paused|halted|inactive|is off)\b/i,
+  /\bintegrations?\b[^.!?]{0,60}\b(not (active|connected)|none)\b/i,
   /\b(tracking|monitoring)\b[^.!?]{0,40}\b(be added|is added|added to|set up|enabled|configured)\b/i,
   /\bnull data\b|\bdata (is|are) (null|missing|unavailable|not available)\b|\bno data (for|from|on)\b/i,
   /\bnot (yet )?connected\b|\b(connect|reconnect|link)\b[^.!?]{0,20}\b(search console|google analytics|ga4)\b/i,
-  /\b(aggiung|attiv|configur|richied|impost)\w*[^.!?]{0,60}\b(tracciamento|monitoraggio)\b/i,
+  /\b(aggiung|attiv|configur|richied|impost|ripristin|riattiv)\w*[^.!?]{0,60}\b(tracciamento|monitoraggio)\b/i,
+  /\b(tracciamento|monitoraggio)\b[^.!?]{0,40}\b(ferm[oa]|sospes[oa]|interrott[oa]|spent[oa])\b/i,
+  /\bintegrazion[ei]\b[^.!?]{0,80}\b(non (attiv|conness|collegat)\w*|nessuna)\b|\bnessuna integrazione\b/i,
   /\bdati (null|mancanti|non disponibili)\b|\bnessun dato (per|da|su)\b/i,
-  /\bnon (è |sono )?(ancora )?collegat[oaie]\b|\b(collega|ricollega)\w*[^.!?]{0,20}\b(search console|google analytics|ga4)\b/i,
+  /\bnon (è |sono )?(ancora )?(collegat|conness)[oaie]\b|\b(collega|ricollega)\w*[^.!?]{0,20}\b(search console|google analytics|ga4)\b/i,
+  // Raw payload words: a null value or a field name never belongs in client prose.
+  /\bnull\b|\bnot_connected\b/i,
+  /\b(sovOverall|sovByEngine|deltaPct|healthScore|aiSov|avgPosition|gscClicks|ga4Sessions|citationRate|auditedAt|periodStart|periodEnd)\b/,
 ]
 
 export function isToolTalk(text: string): boolean {
@@ -552,4 +559,20 @@ export async function fetchNarrativeWithRetries(
 
   console.error(`${logPrefix} narrative generation exhausted retries: ${lastReason}`)
   return { ok: false, reason: lastReason }
+}
+
+/**
+ * A narrative as stored by any past build, made client-safe the way the build is today: a summary
+ * that is the model's raw ```json … ``` completion (builds before parseNarrativeContent) is
+ * recovered, and tool-talk is removed. Used when a stored report is shown (web, PDF, deck) or
+ * handed to an agent (MCP get_client_report).
+ */
+export function cleanStoredNarrative(stored: Record<string, unknown>): Record<string, unknown> {
+  let narrative = stored
+  const summary = narrative['executiveSummary']
+  if (typeof summary === 'string' && /^\s*(```|\{)/.test(summary) && summary.includes('executiveSummary')) {
+    const parsed = parseNarrativeContent(summary)
+    if (parsed && typeof parsed['executiveSummary'] === 'string') narrative = { ...narrative, ...parsed }
+  }
+  return removeToolTalk(narrative).narrative
 }

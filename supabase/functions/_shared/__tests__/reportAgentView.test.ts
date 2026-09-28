@@ -66,3 +66,25 @@ Deno.test('summarizeClientReport is one line per report with headline KPIs', () 
   assertEquals(out.avg_position, null)
   assertEquals(out.sections, ['summary', 'geo', 'gsc'])
 })
+
+// An agent drafting the client email from get_client_report must get the narrative the web shows,
+// not the stored one (28/09: tool-talk and a raw JSON completion in reports built before the fixes).
+Deno.test('the agent view cleans a stored narrative like the web view', () => {
+  const withToolTalk = compactClientReport({
+    ...row,
+    narrative: {
+      executiveSummary: 'Share of voice reached 30.8%. ChatGPT mentions you most.',
+      nextActions: ['Add JSON-LD schema to the 3 pages missing it.', "Request Google AI Overviews-specific tracking be added to next month's monitoring, as this engine shows null data."],
+      sections: { geo: 'ChatGPT leads. Google AI Overviews shows null data.' },
+    },
+  })
+  assertEquals(withToolTalk.narrative.nextActions, ['Add JSON-LD schema to the 3 pages missing it.'])
+  assertEquals(withToolTalk.narrative.sections, { geo: 'ChatGPT leads.' })
+
+  const rawJson = compactClientReport({
+    ...row,
+    narrative: { executiveSummary: '```json { "executiveSummary": "Lo score è 72.", "sections": {}, "nextActions": ["Correggere il title"] } ```', sections: {}, nextActions: [] },
+  })
+  assertEquals(rawJson.narrative.executiveSummary, 'Lo score è 72.')
+  assertEquals(rawJson.narrative.nextActions, ['Correggere il title'])
+})

@@ -1328,7 +1328,8 @@
 			"exporting": "Preparing the deck…",
 			"exportError": "The presentation couldn't be prepared. Try again in a moment.",
 			"hint": "Downloads a widescreen .pptx you can open in PowerPoint, Keynote or Google Slides and present to the client.",
-			"closingTitle": "Thank you"
+			"closingTitle": "Thank you",
+			"scorecardFirstReading": "The key numbers for this period. Comparisons start with the next report."
 		},
 				"series": {
 			"sov": "Share of voice",
@@ -1396,7 +1397,9 @@
 			"mentions_other": "{{count}} mentions",
 			"noMentions": "not mentioned yet",
 			"moat": "Most reports stop at Google. This one also shows what {{engines}} answer when your customers ask them.",
-			"moatGeneric": "Most reports stop at Google. This one also shows what AI assistants answer when your customers ask them."
+			"moatGeneric": "Most reports stop at Google. This one also shows what AI assistants answer when your customers ask them.",
+			"methodNote_one": "How it's measured: {{engines}} answers from the model, without web search; sources and the citation rate come from Perplexity and Google AI Overviews.",
+			"methodNote_other": "How it's measured: {{engines}} answer from the model, without web search; sources and the citation rate come from Perplexity and Google AI Overviews."
 		},
 		"briefing": {
 			"title": "Executive briefing",
@@ -1523,6 +1526,9 @@
 		"copyShareLink": "Copy link",
 		"linkCopied": "Link copied",
 		"revokeShare": "Disable link",
+		"shareDisabled": "The client link of this report is disabled: the old link no longer opens it.",
+		"createShareLink": "Create a new link",
+		"createShareLinkError": "The new link could not be created. Try again in a moment.",
 		"shareNotEnabled": "On the Agency plan every report gets a client link the moment it is built.",
 		"customDomainTitle": "Serve reports from your own domain (CNAME)",
 		"customDomainStep1": "1. Add a subdomain for client reports (e.g. reports.youragency.com).",

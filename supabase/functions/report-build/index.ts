@@ -12,6 +12,7 @@ import { buildTrimmedNarrativePrompt } from '../_shared/reportNarrativePayload.t
 import { loadReportHistory } from '../_shared/reportHistory.ts'
 import { restrictReportData } from '../_shared/reportScope.ts'
 import { publishableKey, secretKey } from '../_shared/supabaseKeys.ts'
+import { canShareReports, generateShareToken } from '../_shared/reportShare.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,12 +32,6 @@ function ymd(d: Date): string {
 function parseDate(raw: unknown): string | null {
   if (typeof raw !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null
   return raw
-}
-
-function generateShareToken(): string {
-  const bytes = new Uint8Array(24)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
 }
 
 function degradedNarrative(locale: string, reason = 'generation_failed'): Record<string, unknown> {
@@ -109,6 +104,8 @@ Deno.serve(async (req) => {
   const admin = createClient(supabaseUrl, serviceKey)
 
   let payload: {
+    action?: string
+    reportId?: string
     projectId?: string
     periodStart?: string
     periodEnd?: string
@@ -123,6 +120,23 @@ Deno.serve(async (req) => {
     payload = await req.json()
   } catch {
     return json({ error: 'invalid_json' }, 400)
+  }
+
+  // A fresh public link for an existing report (after a revoke, or to retire a leaked one).
+  if (payload.action === 'reshare') {
+    const reportId = typeof payload.reportId === 'string' ? payload.reportId : ''
+    if (!reportId) return json({ error: 'missing_report' }, 400)
+    const { data: report } = await admin.from('client_reports').select('id, user_id').eq('id', reportId).maybeSingle()
+    if (!report || report.user_id !== user.id) return json({ error: 'forbidden' }, 403)
+    if (!(await canShareReports(admin, user.id))) return json({ error: 'plan_required' }, 403)
+    const { data: updated, error: updateErr } = await admin
+      .from('client_reports')
+      .update({ share_token: generateShareToken() })
+      .eq('id', reportId)
+      .select('id, share_token')
+      .single()
+    if (updateErr || !updated?.share_token) return json({ error: 'reshare_failed' }, 500)
+    return json({ ok: true, report: updated })
   }
 
   const projectId = payload.projectId
@@ -186,7 +200,8 @@ Deno.serve(async (req) => {
         ? (project.metadata as Record<string, unknown>).white_label_report ?? null
         : null)
 
-    const shareToken = payload.share === true ? generateShareToken() : null
+    // The UI only asks for a link on Agency plans; the server holds the same line.
+    const shareToken = payload.share === true && (await canShareReports(admin, user.id)) ? generateShareToken() : null
 
     const { data: inserted, error: insertErr } = await admin
       .from('client_reports')

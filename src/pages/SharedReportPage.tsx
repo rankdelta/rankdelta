@@ -155,7 +155,7 @@ export function SharedReportPage() {
         readOnly
       />
       {chromeFooter && (
-        <p className="print:hidden mx-auto mt-6 max-w-[900px] text-center text-xs text-white/40">{chromeFooter}</p>
+        <p className="print:hidden mx-auto mt-6 max-w-[900px] text-center text-xs text-white/60">{chromeFooter}</p>
       )}
     </div>
   )

@@ -32,7 +32,7 @@ import { ConnectPrompt, EmptyStateNote, NarrativeBlock, SectionHeaderRow } from 
 import { fmtAxisDate, fmtDecimals, fmtPosition, fmtWholeNumber, kpiSparklineSeries, SECTION_CONNECT_KEYS } from '../../../lib/agencyReport/reportUi'
 import { emptyStateTimestamp, fmtGuidanceDate, isEmptyGuidanceSection, SECTION_EMPTY_KEYS } from '../../../lib/agencyReport/emptyStates'
 import { widgetDataState } from '../../../lib/agencyReport/widgetData'
-import { NivoBarChart, NivoLineChart } from './ReportCharts'
+import { NivoBarChart, NivoLineChart } from '../lazyCharts'
 
 function fmtPct(v: number | null | undefined, digits = 1) {
   return v != null ? `${fmtDecimals(v, digits)}%` : '—'
@@ -468,13 +468,13 @@ export function SiteHealthIssuesTable({
                         ))}
                       </ul>
                       {hidden > 0 ? (
-                        <div className="text-[11px] text-gray-400 mt-0.5">
+                        <div className="text-[11px] text-gray-500 mt-0.5">
                           {t('agencyReport.siteIssues.morePages', { count: hidden })}
                         </div>
                       ) : null}
                     </div>
                   ) : isSiteWide ? (
-                    <div className="text-[11px] text-gray-400 mt-1.5 italic">
+                    <div className="text-[11px] text-gray-500 mt-1.5 italic">
                       {t('agencyReport.siteIssues.siteWide')}
                     </div>
                   ) : null}
@@ -563,7 +563,7 @@ function renderTable(
               <tr key={c.id ?? `${c.name}-${i}`} className="border-t border-gray-100">
                 <td className="py-2">{c.name}</td>
                 <td className="py-2 tabular-nums">
-                  {!countsOk ? '—' : c.mentions > 0 ? fmtWholeNumber(c.mentions) : <span className="text-gray-400">{t('agencyReport.hero.noMentions')}</span>}
+                  {!countsOk ? '—' : c.mentions > 0 ? fmtWholeNumber(c.mentions) : <span className="text-gray-500">{t('agencyReport.hero.noMentions')}</span>}
                 </td>
               </tr>
             ))}

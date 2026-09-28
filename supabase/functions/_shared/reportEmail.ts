@@ -43,6 +43,8 @@ export interface ReportEmailSummary {
   gscClicksDeltaPct?: number | null
   ga4SessionsDeltaPct?: number | null
   healthScoreDelta?: number | null
+  /** Date of the site audit behind the health score, only when it predates the period (ISO). */
+  healthAuditedAt?: string | null
   /** First sentence of the written summary, already in the report language. */
   headline?: string | null
   /** First recommended next step. */
@@ -51,25 +53,35 @@ export interface ReportEmailSummary {
   firstReading?: boolean
 }
 
-/** First sentence of a block of prose, trimmed to `max` characters. */
-export function firstSentence(text: unknown, max = 220): string | null {
+/**
+ * First sentence of a block of prose, at most `max` characters. A longer sentence is cut at its
+ * last clause break (", ", " — ", "; ", ": ") or else at a word boundary, never mid-word: the
+ * client read "… against Cleanbnb (12 mentions), Italianway (8), an…" in the email.
+ */
+export function firstSentence(text: unknown, max = 260): string | null {
   if (typeof text !== 'string') return null
   const t = text.replace(/\s+/g, ' ').trim()
   if (!t) return null
   const m = t.match(/^.+?[.!?](?=\s|$)/)
   const s = (m ? m[0] : t).trim()
-  return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s
+  if (s.length <= max) return s
+  const head = s.slice(0, max - 1)
+  let clause = -1
+  for (const sep of [', ', ' — ', ' – ', '; ', ': ']) clause = Math.max(clause, head.lastIndexOf(sep))
+  const space = head.lastIndexOf(' ')
+  const cut = clause >= max * 0.5 ? clause : space >= max * 0.6 ? space : head.length
+  return `${head.slice(0, cut).replace(/[\s,;:—–-]+$/, '')}…`
 }
 
 function firstNextAction(narrative: Record<string, unknown> | null | undefined): string | null {
   const list = narrative?.nextActions
   if (!Array.isArray(list)) return null
   for (const item of list) {
-    if (typeof item === 'string' && item.trim()) return firstSentence(item, 160)
+    if (typeof item === 'string' && item.trim()) return firstSentence(item, 220)
     if (item && typeof item === 'object') {
       const o = item as Record<string, unknown>
       const text = o.title ?? o.action ?? o.text
-      if (typeof text === 'string' && text.trim()) return firstSentence(text, 160)
+      if (typeof text === 'string' && text.trim()) return firstSentence(text, 220)
     }
   }
   return null
@@ -98,6 +110,27 @@ function sourceIsEmpty(data: Record<string, unknown>, source: 'gsc' | 'ga4'): bo
   if (!section || typeof section !== 'object' || (section as { data?: unknown }).data === null) return false
   if (source === 'gsc') return !(metricValue(section, 'clicks') ?? 0) && !(metricValue(section, 'impressions') ?? 0)
   return !(metricValue(section, 'sessions') ?? 0) && !(metricValue(section, 'users') ?? 0)
+}
+
+/** The audit date when the health score comes from an audit older than the period, else null. */
+function auditBeforePeriod(siteHealth: unknown, periodStart: string): string | null {
+  if (!siteHealth || typeof siteHealth !== 'object') return null
+  const auditedAt = (siteHealth as { auditedAt?: unknown }).auditedAt
+  if (typeof auditedAt !== 'string') return null
+  const audited = new Date(auditedAt).getTime()
+  const start = new Date(`${periodStart}T00:00:00Z`).getTime()
+  return Number.isFinite(audited) && Number.isFinite(start) && audited < start ? auditedAt : null
+}
+
+/** "16 set" / "Sep 16" (ISO date on any formatting failure). */
+export function formatEmailDay(iso: string, locale: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10)
+  try {
+    return new Intl.DateTimeFormat(intlLocale(locale), { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(d).replace(/\./g, '')
+  } catch {
+    return iso.slice(0, 10)
+  }
 }
 
 /** Build the email summary from assembled report data (+ the written narrative when available). */
@@ -131,6 +164,7 @@ export function extractReportEmailSummary(
     ga4SessionsDeltaPct: ga4Sessions.deltaPct,
     healthScore: healthScore.value,
     healthScoreDelta: healthScore.delta,
+    healthAuditedAt: auditBeforePeriod(data.site_health, periodStart),
     headline: firstSentence(narrative?.executiveSummary),
     nextAction: firstNextAction(narrative),
     firstReading,
@@ -282,9 +316,12 @@ export function buildScheduledReportEmail(
   }
   if (summary.healthScore != null) {
     rows.push({
-      label: it ? 'Salute del sito' : 'Site health',
+      // An audit older than the period is dated, and nothing "moved" this period.
+      label: summary.healthAuditedAt
+        ? `${it ? 'Salute del sito' : 'Site health'} (${it ? 'audit del' : 'audit of'} ${formatEmailDay(summary.healthAuditedAt, locale)})`
+        : it ? 'Salute del sito' : 'Site health',
       value: `${formatEmailNumber(summary.healthScore, locale)}/100`,
-      move: movement(summary.healthScoreDelta, locale, 'raw'),
+      move: summary.healthAuditedAt ? null : movement(summary.healthScoreDelta, locale, 'raw'),
     })
   }
 

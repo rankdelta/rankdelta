@@ -32,13 +32,13 @@ export function DeltaChip({
   className?: string
   onDark?: boolean
 }) {
-  if (value == null) return <span className={`text-xs tabular-nums ${onDark ? 'text-white/40' : 'text-gray-400'}`} aria-hidden>—</span>
+  if (value == null) return <span className={`text-xs tabular-nums ${onDark ? 'text-white/60' : 'text-gray-500'}`} aria-hidden>—</span>
   const flat = Math.abs(value) < (digits === 0 ? 0.5 : 0.05)
   const good = positiveIsGood ? value > 0 : value < 0
   // A flat reading is "±0", not a mystery glyph next to a zero.
   const arrow = flat ? '±' : good ? '▲' : '▼'
   const cls = flat
-    ? onDark ? 'text-white/40' : 'text-gray-400'
+    ? onDark ? 'text-white/60' : 'text-gray-500'
     : good
       ? onDark ? 'text-emerald-400' : 'text-emerald-600'
       : onDark ? 'text-red-400' : 'text-red-500'
@@ -134,7 +134,7 @@ export function ConnectPrompt({
       className={`rounded-xl border border-dashed border-gray-200 bg-gray-50/80 text-center ${compact ? 'px-3 py-3' : 'px-4 py-5'}`}
       role="status"
     >
-      <p className={compact ? 'text-xs text-gray-400' : 'text-sm text-gray-500'}>{message}</p>
+      <p className={compact ? 'text-xs text-gray-500' : 'text-sm text-gray-500'}>{message}</p>
       {actionLabel && onAction && (
         <button
           type="button"
@@ -159,10 +159,10 @@ export function EmptyStateNote({ message, meta }: { message: string; meta?: stri
       role="status"
       data-testid="empty-state-note"
     >
-      <InformationCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-400" aria-hidden />
+      <InformationCircleIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" aria-hidden />
       <div className="min-w-0">
         <p className="text-sm leading-relaxed text-gray-600">{message}</p>
-        {meta && <p className="mt-0.5 text-xs text-gray-400">{meta}</p>}
+        {meta && <p className="mt-0.5 text-xs text-gray-500">{meta}</p>}
       </div>
     </div>
   )

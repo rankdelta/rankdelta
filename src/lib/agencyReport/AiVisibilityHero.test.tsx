@@ -248,3 +248,44 @@ describe('AiVisibilityHero citation sample', () => {
     expect(screen.queryByTestId('hero-citation-sample')).toBeNull()
   })
 })
+
+// Angelo 28/09: ChatGPT and Gemini stay without web search, labelled honestly in the report.
+describe('how the engines are measured', () => {
+  it('lists the measured engines that answer from the model (ChatGPT, Gemini), not Perplexity', () => {
+    expect(buildHeroModel(data)!.modelOnlyEngines).toEqual(['ChatGPT'])
+    const both = buildHeroModel({
+      ...data,
+      geo: { ...data.geo!, sovByEngine: [{ engine: 'chatgpt', sovPercent: 33 }, { engine: 'gemini', sovPercent: 20 }, { engine: 'perplexity', sovPercent: 29 }] },
+    } as ReportData)!
+    expect(both.modelOnlyEngines).toEqual(['ChatGPT', 'Gemini'])
+  })
+
+  it('says so under the hero, in English and in Italian', async () => {
+    const { unmount } = render(
+      <I18nextProvider i18n={i18n}>
+        <AiVisibilityHero data={data} />
+      </I18nextProvider>,
+    )
+    expect(screen.getByTestId('hero-method-note')).toHaveTextContent(
+      "How it's measured: ChatGPT answers from the model, without web search; sources and the citation rate come from Perplexity and Google AI Overviews.",
+    )
+    unmount()
+    await i18n.changeLanguage('it')
+    render(
+      <I18nextProvider i18n={i18n}>
+        <AiVisibilityHero data={data} />
+      </I18nextProvider>,
+    )
+    expect(screen.getByTestId('hero-method-note')).toHaveTextContent('Come si misura: ChatGPT risponde dal modello, senza ricerca web')
+    await i18n.changeLanguage('en')
+  })
+
+  it('stays silent when only engines with web search were measured', () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <AiVisibilityHero data={{ ...data, geo: { ...data.geo!, sovByEngine: [{ engine: 'perplexity', sovPercent: 90 }] } } as ReportData} />
+      </I18nextProvider>,
+    )
+    expect(screen.queryByTestId('hero-method-note')).not.toBeInTheDocument()
+  })
+})

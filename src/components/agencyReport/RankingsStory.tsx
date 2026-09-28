@@ -34,7 +34,7 @@ export function RankMovers({ movers, limit = 5, title }: { movers: Mover[]; limi
           {t(kind === 'wins' ? 'agencyReport.story.biggestWins' : 'agencyReport.story.biggestDrops')}
         </p>
         {items.length === 0 ? (
-          <p className="text-xs text-gray-400">{t(kind === 'wins' ? 'agencyReport.story.noWins' : 'agencyReport.story.noDrops')}</p>
+          <p className="text-xs text-gray-500">{t(kind === 'wins' ? 'agencyReport.story.noWins' : 'agencyReport.story.noDrops')}</p>
         ) : (
           <ul className="divide-y divide-gray-100 rounded-xl border border-gray-200">
             {items.map((m) => {
@@ -115,7 +115,7 @@ export function RankDistributionBar({
             <span className="font-medium text-gray-700">{b.label}</span>
             <span className="tabular-nums">
               {fmtWholeNumber(b.count)}
-              <span className="text-gray-400"> · {fmtPct((b.count / total) * 100, 0)}</span>
+              <span className="text-gray-500"> · {fmtPct((b.count / total) * 100, 0)}</span>
             </span>
           </span>
         ))}

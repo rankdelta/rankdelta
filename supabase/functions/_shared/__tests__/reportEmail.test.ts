@@ -161,6 +161,21 @@ Deno.test('firstSentence trims to one sentence and caps length', () => {
   assert(long && long.length <= 50 && long.endsWith('…'))
 })
 
+// Real headline of a shared report (28/09), names fictional: the email cut it as "…, an…".
+Deno.test('a long first sentence is cut at a clause or a word, never mid-word', () => {
+  const s =
+    'Acme now holds a 32.6% share of voice across AI search engines, with Perplexity at 33.3% and ChatGPT at 31.6% — a strong foothold in head-to-head comparison queries against Beta (12 mentions), Gamma (8), and Delta (4).'
+  const out = firstSentence(s, 180)!
+  assert(out.length <= 180)
+  assertEquals(out, 'Acme now holds a 32.6% share of voice across AI search engines, with Perplexity at 33.3% and ChatGPT at 31.6%…')
+  // With room for the next clause, the cut moves to it.
+  assertEquals(firstSentence(s, 200), 'Acme now holds a 32.6% share of voice across AI search engines, with Perplexity at 33.3% and ChatGPT at 31.6% — a strong foothold in head-to-head comparison queries against Beta (12 mentions)…')
+  // No clause break late enough: word boundary.
+  assertEquals(firstSentence('Expand the four thin content pages flagged by the audit because they are the direct blocker to citations today.', 60), 'Expand the four thin content pages flagged by the audit…')
+  // Fits: unchanged.
+  assertEquals(firstSentence(s), s)
+})
+
 Deno.test('formatEmailPeriod renders human dates per locale, ISO on bad input', () => {
   assertEquals(formatEmailPeriod('2026-08-16', '2026-09-14', 'it'), '16 ago – 14 set 2026')
   assertEquals(formatEmailPeriod('2026-08-16', '2026-09-14', 'en'), 'Aug 16 – Sep 14, 2026')
@@ -294,4 +309,23 @@ Deno.test('buildScheduledReportEmail: a quote in the logo URL cannot open a new 
   assert(!html.includes('" onerror="'))
   assert(html.includes('logo.png&quot; onerror=&quot;alert(1)'))
   assert(html.includes('O&#39;Brien &amp; Co'))
+})
+
+// The web report and the narrative date a health score from an old audit (#497/#502); the email
+// showed it as this period's number.
+Deno.test('the email dates a health score that comes from an audit older than the period', () => {
+  const data = { summary: { healthScore: { value: 84, delta: 3, deltaPct: 3.7 } }, site_health: { auditScore: 84, auditedAt: '2026-08-10T12:00:00Z' } }
+  const old = extractReportEmailSummary(data, 'Acme', '2026-08-25', '2026-09-23', null)
+  assertEquals(old.healthAuditedAt, '2026-08-10T12:00:00Z')
+  const en = buildScheduledReportEmail('en', old, 'https://rankdelta.ai/r/x', null).html
+  assert(en.includes('Site health (audit of Aug 10)'))
+  assert(!en.includes('▲ 3'))
+  const it = buildScheduledReportEmail('it', old, 'https://rankdelta.ai/r/x', null).html
+  assert(it.includes('Salute del sito (audit del 10 ago)'))
+  // Audit inside the period: plain label, movement kept.
+  const fresh = extractReportEmailSummary({ ...data, site_health: { auditScore: 84, auditedAt: '2026-09-01T12:00:00Z' } }, 'Acme', '2026-08-25', '2026-09-23', null)
+  assertEquals(fresh.healthAuditedAt, null)
+  const html = buildScheduledReportEmail('en', fresh, 'https://rankdelta.ai/r/x', null).html
+  assert(html.includes('>Site health<'))
+  assert(html.includes('▲ 3'))
 })

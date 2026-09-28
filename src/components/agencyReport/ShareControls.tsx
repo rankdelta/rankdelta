@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { LinkIcon, NoSymbolIcon } from '@heroicons/react/24/outline'
-import { revokeReportShare } from '../../services/reportBuild'
+import { reshareReport, revokeReportShare } from '../../services/reportBuild'
 import { isCloud } from '../../config/deployment'
 
 interface ShareControlsProps {
   reportId: string
   shareToken: string | null
   isAgency: boolean
+  /** The link was disabled or replaced: reload the report. */
   onRevoked?: () => void
 }
 
@@ -15,6 +16,8 @@ export function ShareControls({ reportId, shareToken, isAgency, onRevoked }: Sha
   const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   const [revoking, setRevoking] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [createError, setCreateError] = useState(false)
 
   if (!isAgency) return null
 
@@ -25,6 +28,19 @@ export function ShareControls({ reportId, shareToken, isAgency, onRevoked }: Sha
     await navigator.clipboard.writeText(shareUrl)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const create = async () => {
+    setCreating(true)
+    setCreateError(false)
+    try {
+      await reshareReport(reportId)
+      onRevoked?.()
+    } catch {
+      setCreateError(true)
+    } finally {
+      setCreating(false)
+    }
   }
 
   const revoke = async () => {
@@ -81,7 +97,19 @@ export function ShareControls({ reportId, shareToken, isAgency, onRevoked }: Sha
           </details>}
         </>
       ) : (
-        <p className="text-sm text-gray-500">{t('agencyReport.shareNotEnabled')}</p>
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600">{t('agencyReport.shareDisabled')}</p>
+          <button
+            type="button"
+            disabled={creating}
+            onClick={() => void create()}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 disabled:opacity-50"
+          >
+            <LinkIcon className="h-4 w-4" />
+            {t('agencyReport.createShareLink')}
+          </button>
+          {createError && <p role="alert" className="text-sm text-red-700">{t('agencyReport.createShareLinkError')}</p>}
+        </div>
       )}
     </div>
   )
