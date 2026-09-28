@@ -2,7 +2,7 @@
 
 > **Open-source SEO and AI-visibility reporting, for agencies and for your own sites.**
 
-Find out what ChatGPT, Perplexity and Gemini say when someone asks for what you sell. See it next to your Google rankings, Search Console and GA4, and send it as one report your client actually reads. Run it on your own keys, or let us host it.
+Find out which brands AI answers name when someone asks for what you sell: GPT, Gemini and Perplexity models, plus Google's AI Overviews. See it next to your Google rankings, Search Console and GA4, and send it as one report your client actually reads. Run it on your own keys, or let us host it.
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![MCP server](https://img.shields.io/badge/MCP-32%20tools-8b5cf6.svg)](#connect-your-ai-agent-mcp)
@@ -17,7 +17,7 @@ Works with your agent: Claude, ChatGPT, Cursor, OpenCode, or any MCP client.
 
 ## Why Rankdelta
 
-- **Your prompts, asked live.** Not a pre-collected database: Rankdelta asks ChatGPT, Perplexity and Gemini the questions your buyers ask, on a schedule, for about $0.004 per prompt per engine. You see who gets named, who gets named instead of you, and which sources the answers cite.
+- **Your prompts, asked live.** Not a pre-collected database: Rankdelta asks GPT, Gemini and Perplexity models (through OpenRouter) the questions your buyers ask, and checks Google's AI Overviews, on a schedule, for about $0.004 per prompt per engine. You see who gets named, who gets named instead of you, and which sources the answers cite.
 - **One report per site, ready to send.** AI visibility, rankings, Search Console, GA4, site health and backlinks in one place, with a summary and next steps grounded in the numbers. Keep it for your team or white-label it; share it by link, email it weekly or monthly, export it to PDF or PowerPoint.
 - **English and Italian.** Prompts are generated in each market's language, and the interface, reports and emails come in both. New sites pick up their language and market from the site itself.
 - **A writer that doesn't make things up.** It drafts the page you're missing from live SERP research, and never invents statistics, experts, quotes or sources: where your own data belongs, it leaves a visible `[Source needed: …]` note.
@@ -125,7 +125,7 @@ A weekly scan of 25 prompts on 3 engines is roughly $0.30–0.75 per site per we
 
 | | Rankdelta | OpenSEO |
 |---|---|---|
-| AI visibility data | **your own prompts, run live** on ChatGPT, Perplexity and Gemini through OpenRouter (~$0.004 per prompt per engine) | DataForSEO LLM Mentions: a pre-collected database for ChatGPT and Google AI ($0.10 per request + $0.001 per row) |
+| AI visibility data | **your own prompts, run live** on GPT, Gemini and Perplexity models through OpenRouter, plus Google AI Overviews (~$0.004 per prompt per engine) | DataForSEO LLM Mentions: a pre-collected database for ChatGPT and Google AI ($0.10 per request + $0.001 per row) |
 | Content creation | **SEO/GEO article writer** grounded in live SERP research, with fact-checking, verified citations and no invented statistics | — (SERP analysis for keyword research) |
 | Reports | **built from your data** for your own sites or white-labelled for clients: AI visibility, rankings, Search Console, GA4 and site health, with scheduled email, PDF and PowerPoint export | agent-written HTML reports on demand, with templates and share links |
 | Languages | **English and Italian** (interface, prompts, reports, emails) | English |
@@ -137,6 +137,7 @@ Built by a team that runs SEO for client sites and our own: the reports are the 
 
 - Search volumes, difficulty and traffic are estimates from DataForSEO, not an Ahrefs-scale index.
 - AI answers are sampled, so Share of Voice is a measurement with noise, not a ranking.
+- Perplexity and AI Overviews reflect the live web. The GPT and Gemini checks are API calls without web search, so they show what those models know, not what ChatGPT's or Gemini's search mode would return. Web-grounded checks are in progress.
 
 ## Stack
 
