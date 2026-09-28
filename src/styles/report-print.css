@@ -1,0 +1,169 @@
+/*
+ * Agency report — print / "Save as PDF" layout.
+ *
+ * The rules key off `html.report-print` rather than `@media print` alone so the exact same layout
+ * can be applied on screen (`?print=1`) for QA. The Save-as-PDF button adds the class right before
+ * window.print() and the `beforeprint` listener covers Ctrl/Cmd+P. Real page geometry (size, margins,
+ * running footer with page numbers) lives in `@page`, which only matters when printing anyway.
+ */
+
+@page {
+  size: A4 portrait;
+  margin: 14mm 12mm 18mm;
+
+  /* Running footer: agency · client · period on the left, page counter on the right.
+     Chrome 131+ honours page-margin boxes; other engines simply skip them. */
+  @bottom-left {
+    content: var(--report-print-footer, '');
+    font: 500 9px/1.2 Inter, system-ui, -apple-system, sans-serif;
+    color: #6b7280;
+    vertical-align: top;
+    padding-top: 4mm;
+  }
+  @bottom-right {
+    content: var(--report-print-page-label, 'Page') ' ' counter(page) ' / ' counter(pages);
+    font: 500 9px/1.2 Inter, system-ui, -apple-system, sans-serif;
+    color: #9ca3af;
+    vertical-align: top;
+    padding-top: 4mm;
+  }
+}
+
+html.report-print,
+html.report-print body {
+  background: #fff !important;
+}
+
+/* The report itself becomes the whole page: no card chrome, full page-area width. */
+html.report-print .agency-report-view {
+  max-width: none !important;
+  width: auto !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Anything the report authors marked as screen-only (toolbar, share box, upsells, editor). */
+html.report-print [class~="print:hidden"] {
+  display: none !important;
+}
+html.report-print [class~="print:bg-white"] {
+  background: #fff !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+}
+
+/* Entrance animations must not leave a page invisible in the PDF. */
+html.report-print .agency-report-view,
+html.report-print .agency-report-view * {
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Cover alone on page 1. */
+html.report-print .agency-report-cover {
+  break-after: page;
+  page-break-after: always;
+}
+
+/* Never split a widget, section or KPI group across two pages. */
+html.report-print .pdf-export-group,
+html.report-print .agency-report-section {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+html.report-print .agency-report-section h2,
+html.report-print .agency-report-section h3 {
+  break-after: avoid;
+  page-break-after: avoid;
+}
+/* Layout view: a section header travels with the first row of widgets under it. */
+html.report-print .pdf-keep-together {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* A long table is allowed to continue on the next page (rows stay whole, header repeats) rather
+   than jumping there whole and leaving most of a page blank. */
+html.report-print .pdf-export-splittable {
+  break-inside: auto;
+  page-break-inside: auto;
+}
+/* A header row that holds a table (site health: score + "what is holding the site back") must be
+   allowed to break too, or the wrapper drags header, KPI and table onto a new page and clips them. */
+html.report-print .pdf-keep-together-splittable {
+  break-inside: auto;
+  page-break-inside: auto;
+}
+/* Issue table: the "why" line under each issue stays small, the pages column never wraps. */
+html.report-print .agency-report-view table td .text-xs {
+  font-size: 9px;
+  line-height: 1.25;
+}
+/* Tables must fit their column on paper: no scroll container to clip into, smaller type, tighter
+   cells. A five-column query table then fits a half-width widget without losing CTR/position. */
+html.report-print .agency-report-view .overflow-x-auto {
+  overflow: visible !important;
+}
+html.report-print .agency-report-view table {
+  width: 100%;
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+html.report-print .agency-report-view th,
+html.report-print .agency-report-view td {
+  padding: 4px 5px;
+}
+html.report-print .agency-report-view td span.truncate {
+  max-width: 120px;
+}
+/* Half-width widgets (grid span 6 ≈ 88 mm of paper) hold five-column tables: one notch smaller. */
+html.report-print .agency-report-view div[style*="span 6"] table {
+  font-size: 9.5px;
+}
+html.report-print .agency-report-view div[style*="span 6"] th,
+html.report-print .agency-report-view div[style*="span 6"] td {
+  padding: 3px 4px;
+}
+html.report-print .agency-report-view div[style*="span 6"] td span.truncate {
+  max-width: 105px;
+}
+
+/* Tables: keep rows whole, repeat the header when a long table does have to continue. */
+html.report-print table {
+  break-inside: auto;
+}
+html.report-print thead {
+  display: table-header-group;
+}
+html.report-print tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+/* Keep the coloured accents and the dark AI-visibility hero even when "background graphics" is off. */
+html.report-print .agency-report-view [style*="background"],
+html.report-print .agency-report-view [class*="bg-"] {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* The in-flow footers stay where they are (end of document); the per-page footer comes from @page. */
+html.report-print .agency-report-footer {
+  position: static !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-top: 1px solid #e5e7eb;
+}
+
+/* On-screen preview (`?print=1`): mimic the A4 page area so page-break behaviour can be eyeballed. */
+@media screen {
+  html.report-print-preview .agency-report-view {
+    width: 186mm !important;
+    margin: 12mm auto !important;
+    outline: 1px dashed #c4b5fd;
+  }
+}

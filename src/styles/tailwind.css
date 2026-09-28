@@ -1,0 +1,260 @@
+@import "tailwindcss";
+
+/* 
+ * Rankdelta.ai Professional Theme
+ * 
+ * A modern, clean SaaS design system optimized for:
+ * - Light mode with excellent readability
+ * - Professional appearance with teal/cyan accent colors
+ * - Consistent component styling
+ * - WCAG AA accessible contrast ratios
+ */
+
+@theme {
+  /* Primary Brand Colors - Teal/Cyan for SEO/Tech feel */
+  --color-brand-50: #f0fdfa;
+  --color-brand-100: #ccfbf1;
+  --color-brand-200: #99f6e4;
+  --color-brand-300: #5eead4;
+  --color-brand-400: #2dd4bf;
+  --color-brand-500: #14b8a6;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+  
+  /* Legacy cosmic colors for gradual migration */
+  --color-cosmic-dark: #0a0e1a;
+  --color-cosmic-dark-soft: #151b2e;
+  --color-cosmic-dark-card: rgba(21, 27, 46, 0.6);
+  --color-cosmic-cyan: #14b8a6;
+  --color-cosmic-cyan-light: #2dd4bf;
+  --color-cosmic-cyan-dark: #0d9488;
+  --color-cosmic-green: #10b981;
+  --color-cosmic-green-light: #34d399;
+  --color-cosmic-purple: #8b5cf6;
+  --color-cosmic-purple-light: #a78bfa;
+  --color-cosmic-neutral: #f8fafc;
+  
+  /* Status colors - More muted for professional look */
+  --color-status-success: #10b981;
+  --color-status-error: #ef4444;
+  --color-status-warning: #f59e0b;
+  --color-status-info: #0ea5e9;
+}
+
+/* Professional Base Styles */
+@layer base {
+  :root {
+    /* Brand colors */
+    --color-primary: #14b8a6;
+    --color-primary-hover: #0d9488;
+    --color-primary-light: #ccfbf1;
+    
+    /* Neutral palette */
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #f8fafc;
+    --color-bg-tertiary: #f1f5f9;
+    
+    /* Text colors */
+    --color-text-primary: #0f172a;
+    --color-text-secondary: #475569;
+    --color-text-muted: #94a3b8;
+    
+    /* Border colors */
+    --color-border: #e2e8f0;
+    --color-border-hover: #cbd5e1;
+    
+    /* Focus ring */
+    --color-focus-ring: rgba(20, 184, 166, 0.25);
+  }
+
+  * {
+    @apply antialiased;
+  }
+
+  body {
+    background-color: var(--color-bg-secondary);
+    color: var(--color-text-primary);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Modern, subtle scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: #cbd5e1;
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #94a3b8;
+  }
+
+  /* Firefox scrollbar */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+  }
+
+  /* Hide scrollbar utility */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Focus visible styles for accessibility */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+
+  /* Selection color */
+  ::selection {
+    background-color: var(--color-primary-light);
+    color: var(--color-text-primary);
+  }
+}
+
+/* Component Layer - Reusable patterns */
+@layer components {
+  /* Modern glassmorphism for modals/overlays */
+  .glass {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(226, 232, 240, 0.8);
+  }
+
+  .glass-strong {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(226, 232, 240, 0.9);
+  }
+
+  /* Text gradients - Updated for light theme */
+  .text-gradient-primary {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #14b8a6 0%, #0ea5e9 100%);
+  }
+
+  .text-gradient-cyan {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #0d9488 0%, #0891b2 100%);
+  }
+
+  .text-gradient-green {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #059669 0%, #10b981 100%);
+  }
+
+  .text-gradient-purple {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%);
+  }
+
+  /* Subtle shadow effects for elevation */
+  .shadow-soft {
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  }
+
+  .shadow-medium {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  }
+
+  .shadow-strong {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.05);
+  }
+
+  /* Colored shadow effects */
+  .shadow-primary {
+    box-shadow: 0 4px 14px 0 rgba(20, 184, 166, 0.15);
+  }
+
+  .shadow-success {
+    box-shadow: 0 4px 14px 0 rgba(16, 185, 129, 0.15);
+  }
+
+  /* Glow effects - Subtle for light theme */
+  .glow-cyan {
+    box-shadow: 0 0 20px rgba(20, 184, 166, 0.15), 0 0 40px rgba(20, 184, 166, 0.05);
+  }
+
+  .glow-green {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.15), 0 0 40px rgba(16, 185, 129, 0.05);
+  }
+
+  /* Hover card effect */
+  .hover-lift {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .hover-lift:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+  }
+
+  /* Input focus ring */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-4 focus:ring-teal-500/20 focus:border-teal-500;
+  }
+
+  /* Skeleton loading animation */
+  .skeleton {
+    background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s ease-in-out infinite;
+  }
+
+  @keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Agency report print layout */
+  @media print {
+    .agency-report-cover {
+      break-after: page;
+      page-break-after: always;
+    }
+    .agency-report-section {
+      break-inside: avoid-page;
+      page-break-inside: avoid;
+    }
+    .agency-report-section h2 {
+      break-after: avoid;
+      page-break-after: avoid;
+    }
+    .agency-report-view {
+      box-shadow: none !important;
+      border-radius: 0 !important;
+      max-width: 100% !important;
+    }
+    .agency-report-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 0.75rem 2.5rem;
+      background: white;
+      border-top: 1px solid #e5e7eb;
+    }
+    .agency-report-body {
+      padding-bottom: 3rem;
+    }
+  }
+}

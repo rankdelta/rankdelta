@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Best practice for the one-codebase model: prove BOTH editions build from the same source.
+  build:
+    name: Build (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        mode: [cloud, selfhost]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Type-check + build
+        env:
+          # 'cloud' is not 'selfhost', so it resolves to the default cloud edition.
+          VITE_DEPLOYMENT_MODE: ${{ matrix.mode }}
+        run: pnpm run build
+
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:unit
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Errors only; type-safety debt is reported as warnings by `pnpm lint:all`.
+      - run: pnpm run lint
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/check-secrets.mjs
+
+  edge-function-tests:
+    name: Edge function tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check supabase/functions/report-build/index.ts supabase/functions/report-schedule-runner/index.ts supabase/functions/gsc-connect/index.ts
+      - run: deno test --allow-net --allow-env --allow-read --no-check supabase/functions/_shared/__tests__/report*.test.ts supabase/functions/_shared/__tests__/gscSync.test.ts supabase/functions/_shared/__tests__/cronSecret.test.ts supabase/functions/_shared/__tests__/opsWatchdog.test.ts supabase/functions/_shared/__tests__/appOrigin.test.ts supabase/functions/visibility-ops/__tests__/ supabase/functions/mcp/__tests__/
+
+  # A self-hoster's first step: every migration must apply cleanly to an empty database.
+  fresh-install:
+    name: Fresh install (migrations)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: latest
+      - run: supabase db start
+      - run: supabase db reset
+
+  selfhost-fullstack:
+    # Local Supabase (auth, DB, edge functions with SELF_HOST=true) behind the Docker frontend, built
+    # exactly as SELF_HOSTING.md says. Edge-function smoke checks (CORS for the app origin, MCP stays
+    # on the install), then every e2e spec in a browser: entry and CSP, sign-up, an API key created
+    # from the page, MCP with that key. One stack, one image build.
+    name: Self-host (Docker + Supabase, browser)
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: latest
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: supabase start -x studio,imgproxy,logflare,vector,supavisor
+      - name: Point the app at the local Supabase
+        run: |
+          supabase status -o env | tr -d '"' | sed -n -e 's/^API_URL=/VITE_SUPABASE_URL=/p' -e 's/^ANON_KEY=/VITE_SUPABASE_ANON_KEY=/p' >> "$GITHUB_ENV"
+      - run: printf 'SELF_HOST=true\nAPP_ORIGIN=http://localhost:8080\n' > "$RUNNER_TEMP/selfhost.env"
+      - name: Serve edge functions (self-host mode)
+        run: |
+          supabase functions serve --env-file "$RUNNER_TEMP/selfhost.env" > "$RUNNER_TEMP/functions.log" 2>&1 &
+      - name: Self-host database setup (supabase/setup/self-host.sql)
+        run: docker exec -i "$(docker ps --filter name=supabase_db --format '{{.Names}}' | head -1)" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/setup/self-host.sql
+      - name: Edge function smoke checks (straight to the edge runtime)
+        # The local API gateway answers CORS preflights with `*` itself, so call the edge runtime
+        # directly from the Supabase Docker network to see what the functions answer.
+        run: |
+          EDGE=$(docker ps --filter name=supabase_edge_runtime --format '{{.Names}}' | head -1)
+          NET=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$EDGE")
+          KONG=$(docker ps --filter name=supabase_kong --format '{{.Names}}' | head -1)
+          docker run --rm --network "$NET" -v "$PWD:/w" -w /w -e FUNCTIONS_URL="http://$EDGE:8081" \
+            -e SMOKE_AUTH_URL="http://$KONG:8000/auth/v1" -e SMOKE_ANON_KEY="$VITE_SUPABASE_ANON_KEY" alpine:3.20 \
+            sh -c 'apk add -q --no-cache bash curl jq && bash scripts/selfhost-smoke.sh'
+      - name: Scheduled jobs reach the functions (Vault → pg_net → Edge)
+        run: |
+          DB_CONTAINER=$(docker ps --filter name=supabase_db --format '{{.Names}}' | head -1) \
+          FUNCTIONS_BASE="http://$(docker ps --filter name=supabase_kong --format '{{.Names}}' | head -1):8000" \
+            bash scripts/selfhost-cron-check.sh
+      - run: docker build -f Dockerfile.selfhost --build-arg VITE_SUPABASE_URL --build-arg VITE_SUPABASE_ANON_KEY -t rankdelta-selfhost .
+      - run: docker run -d --name web -p 8080:80 rankdelta-selfhost
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright test
+        env:
+          E2E_BASE_URL: http://localhost:8080
+          E2E_FULLSTACK: '1'
+      - name: Edge runtime log
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/functions.log"
+

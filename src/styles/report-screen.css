@@ -1,0 +1,24 @@
+/*
+ * Agency report on small screens (the client opening a share link on a phone).
+ *
+ * The layout renderer places widgets on a 12-column inline grid; below 640px that grid must
+ * collapse to a single column and wide tables must scroll inside the sheet instead of pushing
+ * the whole page sideways. Print is never narrower than the A4 page area, so these never apply there.
+ */
+@media screen and (max-width: 640px) {
+  .agency-report-view > div[style*="grid-template-columns"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .agency-report-view div[style*="grid-column"] {
+    grid-column: 1 / -1 !important;
+  }
+  .agency-report-view table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .agency-report-view {
+    border-radius: 1rem !important;
+  }
+}

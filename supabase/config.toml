@@ -1,0 +1,67 @@
+# Supabase project config.
+# Minimal on purpose: this repo deploys via `supabase functions deploy ... --project-ref <ref>`.
+# The function blocks below PERSIST the JWT setting so a future deploy can't silently re-enable it.
+project_id = "your-project-ref"
+
+# Public AI-visibility check endpoint — already ran without JWT; keep it that way.
+[functions.ai-visibility-check]
+verify_jwt = false
+
+# The Supabase gateway now rejects the project's legacy anon key (UNAUTHORIZED_LEGACY_JWT), so with
+# verify_jwt on every seo-proxy call 401s before reaching the function. Auth is enforced IN the
+# function instead (resolveCaller: personal API key or JWT). Keep this off, or Site Explorer /
+# keyword / audit / content-generation, MCP paid tools, and the per-account spend cap all break.
+# Do NOT remove.
+[functions.seo-proxy]
+verify_jwt = false
+
+# visibility-ops is invoked by the hosted MCP with the same sk_rankdelta_… Bearer as seo-proxy.
+# Gateway JWT must stay off or those tool calls 401 before in-function resolveCaller runs.
+[functions.visibility-ops]
+verify_jwt = false
+
+# Hosted MCP: Claude/Cursor send Bearer sk_rankdelta_… (or OAuth), not a Supabase user JWT.
+# Gateway JWT must stay off or connector discovery + tool calls 401/403 before our code runs.
+[functions.mcp]
+verify_jwt = false
+
+# api-keys: browser sends user JWT; we verify inside the function. Keep gateway JWT off
+# so legacy anon-key clients aren't rejected at the edge.
+[functions.api-keys]
+verify_jwt = false
+
+# connector-api: marketplace apps use sk_rankdelta_… API keys, not Supabase JWTs.
+[functions.connector-api]
+verify_jwt = false
+
+# Public storefront probe — browser calls with anon key (same as ai-visibility-check).
+[functions.shopify-storefront-probe]
+verify_jwt = false
+
+# prestashop-connector: the Addons module authenticates with X-Api-Key (hashed connector_api_keys lookup), not a user JWT.
+[functions.prestashop-connector]
+verify_jwt = false
+
+# gsc-connect: user JWT verified in-function (getUser), same pattern as seo-proxy.
+[functions.gsc-connect]
+verify_jwt = false
+
+# ga4-connect: user JWT verified in-function (getUser), same pattern as gsc-connect.
+[functions.ga4-connect]
+verify_jwt = false
+
+# report-build: user JWT verified in-function (getUser) + project ownership check.
+[functions.report-build]
+verify_jwt = false
+
+# report-schedule-runner: pg_cron via x-report-schedule-cron-secret (no user JWT).
+[functions.report-schedule-runner]
+verify_jwt = false
+
+# squarespace-webhook: Squarespace signs with x-squarespace-signature (HMAC verified in-function), no JWT.
+[functions.squarespace-webhook]
+verify_jwt = false
+
+# squarespace-oauth-callback: browser redirect from Squarespace (no JWT); the single-use, user-bound nonce in `state` authenticates.
+[functions.squarespace-oauth-callback]
+verify_jwt = false

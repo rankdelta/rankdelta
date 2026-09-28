@@ -1,0 +1,7 @@
+# Test fixture, not a secret: a deliberately wrong cron secret in the internal-caller test.
+supabase/functions/_shared/__tests__/apiKeys.internalCaller.test.ts:generic-api-key:34
+
+# Test fixtures, not secrets: integration-secret values in the public-check guard test.
+src/lib/aiVisibilityCheckGuard.test.ts:generic-api-key:59
+src/lib/aiVisibilityCheckGuard.test.ts:generic-api-key:64
+src/lib/aiVisibilityCheckGuard.test.ts:generic-api-key:69

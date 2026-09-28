@@ -1,0 +1,61 @@
+name: Self-host real keys
+
+# Manual only: spends a few cents of real OpenRouter + DataForSEO credit per run. Needs the
+# repository secrets OPENROUTER_API_KEY, DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  realkeys:
+    name: Self-host with real provider keys
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      DATAFORSEO_LOGIN: ${{ secrets.DATAFORSEO_LOGIN }}
+      DATAFORSEO_PASSWORD: ${{ secrets.DATAFORSEO_PASSWORD }}
+    steps:
+      - name: Secrets present
+        run: |
+          missing=""
+          for s in OPENROUTER_API_KEY DATAFORSEO_LOGIN DATAFORSEO_PASSWORD; do [ -n "${!s}" ] || missing="$missing $s"; done
+          if [ -n "$missing" ]; then echo "Missing repository secrets:$missing"; exit 1; fi
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@45a513f8c64c0bc8e0e3dfe572b5c95be85f6359 # v3.0.1
+        with:
+          version: latest
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: supabase start -x studio,imgproxy,logflare,vector,supavisor
+      - name: Point the app at the local Supabase
+        run: |
+          supabase status -o env | tr -d '"' | sed -n -e 's/^API_URL=/VITE_SUPABASE_URL=/p' -e 's/^ANON_KEY=/VITE_SUPABASE_ANON_KEY=/p' >> "$GITHUB_ENV"
+      - name: Function secrets (never printed)
+        run: |
+          umask 077
+          {
+            printf '%s=%s\n' SELF_HOST true APP_ORIGIN http://localhost:8080
+            for name in OPENROUTER_API_KEY DATAFORSEO_LOGIN DATAFORSEO_PASSWORD; do printf '%s=%s\n' "$name" "${!name}"; done
+          } > "$RUNNER_TEMP/realkeys.env"
+      - name: Serve edge functions (self-host mode)
+        run: |
+          supabase functions serve --env-file "$RUNNER_TEMP/realkeys.env" > "$RUNNER_TEMP/functions.log" 2>&1 &
+      - name: Self-host database setup (supabase/setup/self-host.sql)
+        run: docker exec -i "$(docker ps --filter name=supabase_db --format '{{.Names}}' | head -1)" psql -U postgres -d postgres -v ON_ERROR_STOP=1 < supabase/setup/self-host.sql
+      - run: docker build -f Dockerfile.selfhost --build-arg VITE_SUPABASE_URL --build-arg VITE_SUPABASE_ANON_KEY -t rankdelta-selfhost .
+      - run: docker run -d --name web -p 8080:80 rankdelta-selfhost
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright test e2e/selfhost-realkeys.spec.ts
+        env:
+          E2E_BASE_URL: http://localhost:8080
+          E2E_REAL_KEYS: '1'
+      - name: Edge runtime log (secrets redacted)
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/functions.log" | sed -E 's/(sk-or-[A-Za-z0-9_-]{4})[A-Za-z0-9_-]+/\1…/g'

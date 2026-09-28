@@ -1,0 +1,26 @@
+# Self-host the Rankdelta frontend (open edition). Self-host-only — the hosted cloud never uses this.
+#
+# Prerequisite: your OWN Supabase (auth + edge functions + DB). Bring it up with Supabase's official
+# docker-compose, apply this project's migrations, deploy its edge functions, and set your BYOK
+# secrets (DataForSEO + OpenRouter) as edge-function secrets. See SELF_HOSTING.md.
+#
+# Then set the build args below (copy .env.selfhost.example -> .env and fill in) and run:
+#   docker compose -f docker-compose.selfhost.yml up --build
+# The app is served at http://localhost:8080.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.selfhost
+      args:
+        VITE_DEPLOYMENT_MODE: selfhost
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_USE_SUPABASE_PROXY: "true"
+        VITE_MCP_URL: ${VITE_MCP_URL:-}
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+        VITE_SUPPORT_EMAIL: ${VITE_SUPPORT_EMAIL:-}
+    ports:
+      - "8080:80"
+    restart: unless-stopped

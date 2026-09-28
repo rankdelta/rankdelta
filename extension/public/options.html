@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rankdelta — Settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <header class="head">
+        <span class="brand-mark" aria-hidden="true">&#9651;</span>
+        <h1>Rankdelta SEO Toolbar</h1>
+      </header>
+
+      <p class="lead">
+        Paste your personal Rankdelta API key to power the toolbar. The key is stored only in this
+        browser (<code>chrome.storage.local</code>) and is sent solely to
+        <code>mcp.rankdelta.ai</code>.
+      </p>
+
+      <label class="field">
+        <span class="field-label">Rankdelta API key</span>
+        <input
+          id="key"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="sk_rankdelta_…"
+        />
+      </label>
+
+      <label class="check">
+        <input id="reveal" type="checkbox" />
+        <span>Show key</span>
+      </label>
+
+      <div class="actions">
+        <button id="save" class="btn" type="button">Save</button>
+        <button id="test" class="btn btn-secondary" type="button">Test key</button>
+        <span id="status" class="status" role="status" aria-live="polite"></span>
+      </div>
+
+      <hr />
+
+      <ul class="links">
+        <li>
+          Create a key at
+          <a href="https://rankdelta.ai" target="_blank" rel="noreferrer noopener"
+            >Settings → API &amp; MCP</a
+          >
+        </li>
+        <li>
+          <a href="https://rankdelta.ai/docs/mcp" target="_blank" rel="noreferrer noopener"
+            >MCP documentation</a
+          >
+        </li>
+      </ul>
+    </main>
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

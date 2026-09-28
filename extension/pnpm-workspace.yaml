@@ -1,0 +1,4 @@
+# Standalone package: this file makes pnpm treat `extension/` as its own
+# workspace root, so `pnpm install` here is isolated from the main app and
+# never touches the parent Rankdelta workspace.
+packages: []

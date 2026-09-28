@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Rankdelta</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="app" id="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true">&#9651;</span>
+          <span class="brand-name">Rankdelta</span>
+        </div>
+        <span class="domain" id="domain" title=""></span>
+      </header>
+
+      <main id="content" class="content">
+        <!-- states injected by popup.ts -->
+      </main>
+
+      <footer class="footer">
+        <a id="open-rankdelta" href="https://rankdelta.ai" target="_blank" rel="noreferrer noopener">
+          Open in Rankdelta &#8599;
+        </a>
+        <a id="open-options" href="#" role="button">Settings</a>
+      </footer>
+    </div>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

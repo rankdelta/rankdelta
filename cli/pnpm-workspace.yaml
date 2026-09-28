@@ -1,0 +1,4 @@
+# Isolate this package from the main app's pnpm workspace.
+# `cli/` is its own package root: running `pnpm install` here must NOT pull in
+# the repo-root workspace, and `pnpm install` at the repo root must NOT see cli/.
+packages: []

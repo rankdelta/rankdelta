@@ -1,0 +1,57 @@
+# Self-host build of the Rankdelta SPA (open edition).
+#
+# The app is a Vite SPA: VITE_* vars are compiled in at BUILD time, so pass your Supabase URL/key
+# and selfhost mode as build args. The backend is your OWN Supabase (auth + edge functions + DB) —
+# see SELF_HOSTING.md. This image only builds and serves the static frontend.
+#
+# Hosted (cloud) is unaffected by this file — it is self-host-only, additive, and never referenced
+# by the normal build.
+
+# ── Stage 1: build the SPA ────────────────────────────────────────────────────
+FROM node:20-alpine AS build
+WORKDIR /app
+ENV HUSKY=0
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml ./
+# Native build scripts (esbuild/swc/tailwind) are needed to build; pnpm rebuild runs them even when
+# the interactive approval gate would otherwise skip them.
+RUN pnpm install --frozen-lockfile && pnpm rebuild
+
+COPY . .
+
+# Your Supabase + edition. selfhost turns off billing/paywall/credits (BYOK).
+ARG VITE_DEPLOYMENT_MODE=selfhost
+ARG VITE_SUPABASE_URL
+ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_USE_SUPABASE_PROXY=true
+# Optional: the MCP URL agents should use, if you proxy the mcp function under your own domain.
+ARG VITE_MCP_URL=
+# Optional: Google OAuth client for Search Console / GA4, and the address the Help page shows.
+ARG VITE_GOOGLE_CLIENT_ID=
+ARG VITE_SUPPORT_EMAIL=
+ENV VITE_DEPLOYMENT_MODE=$VITE_DEPLOYMENT_MODE \
+    VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
+    VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY \
+    VITE_USE_SUPABASE_PROXY=$VITE_USE_SUPABASE_PROXY \
+    VITE_MCP_URL=$VITE_MCP_URL \
+    VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID \
+    VITE_SUPPORT_EMAIL=$VITE_SUPPORT_EMAIL
+RUN pnpm run build
+
+# ── Stage 2: serve the static build ───────────────────────────────────────────
+FROM nginx:alpine
+ARG VITE_SUPABASE_URL
+ARG VITE_MCP_URL=
+COPY nginx.selfhost.conf /etc/nginx/conf.d/default.conf
+# The CSP must name your Supabase (possibly plain http://localhost:8000) or the browser blocks every
+# API call, and the MCP host so the MCP sign-in form may post there.
+RUN set -eu; \
+    origin() { printf '%s' "$1" | sed -E 's#^(https?://[^/]+).*$#\1#'; }; \
+    sb="$(origin "${VITE_SUPABASE_URL:-}")"; \
+    ws="$(printf '%s' "$sb" | sed -E 's#^http#ws#')"; \
+    mcp="$(origin "${VITE_MCP_URL:-${VITE_SUPABASE_URL:-}}")"; \
+    sed -i "s#__SUPABASE_ORIGINS__#${sb} ${ws}#; s#__MCP_ORIGIN__#${mcp}#" /etc/nginx/conf.d/default.conf; \
+    if grep -q '__[A-Z_]*__' /etc/nginx/conf.d/default.conf; then echo 'CSP placeholder left in nginx conf' >&2; exit 1; fi
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80

@@ -1,0 +1,21 @@
+{
+  "name": "rankdelta-extension",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Rankdelta SEO Toolbar — Chrome MV3 extension (self-contained, not part of the main app build).",
+  "type": "module",
+  "scripts": {
+    "clean": "node -e \"import('node:fs').then(fs=>fs.rmSync('dist',{recursive:true,force:true}))\"",
+    "icons": "node scripts/gen-icons.mjs",
+    "build": "pnpm run clean && node scripts/gen-icons.mjs && node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.278",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
+  }
+}

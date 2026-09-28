@@ -1,0 +1,66 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment variables - NEVER commit these!
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# API keys and secrets
+*.key
+*.pem
+secrets/
+.secrets
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/launch.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# storybook
+storybook-static
+
+# tests
+/coverage/
+
+# Claude Code local agent state (worktrees, session files)
+.claude/
+.vercel
+.env*
+!.env.example
+!.env.selfhost.example
+
+# Private notes under docs/ (public guides in docs/ are tracked)
+/docs/LINK-INTERSECT-FEASIBILITY.md
+
+# Local tooling junk
+.pnpm-store/
+supabase/.temp/
+
+# raw screenshot captures (WebP versions are the published assets)
+public/blog-assets/*.png
+public/blog-assets/rankdelta-ai-visibility-overview*.webp
+public/blog-assets/rankdelta-ai-visibility-competitors*.webp

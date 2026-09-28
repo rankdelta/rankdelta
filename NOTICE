@@ -1,0 +1,15 @@
+Rankdelta
+Copyright (C) 2026 Agape Group GmbH, Basel, Switzerland — info@rankdelta.ai
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any
+later version. See the LICENSE file for the full text.
+
+The AGPL's network-use clause (section 13) means anyone who runs a modified
+version of Rankdelta as a network service must make their modified source
+available to its users — this is deliberate: it keeps the hosted-SaaS playing
+field level for a self-hostable product.
+
+"Rankdelta" and the Rankdelta logo are trademarks of Agape Group GmbH; see
+TRADEMARK.md.
