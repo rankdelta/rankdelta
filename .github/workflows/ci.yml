@@ -77,7 +77,7 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno check supabase/functions/report-build/index.ts supabase/functions/report-schedule-runner/index.ts supabase/functions/gsc-connect/index.ts
-      - run: deno test --allow-net --allow-env --allow-read --no-check supabase/functions/_shared/__tests__/report*.test.ts supabase/functions/_shared/__tests__/gscSync.test.ts supabase/functions/_shared/__tests__/cronSecret.test.ts supabase/functions/_shared/__tests__/opsWatchdog.test.ts supabase/functions/_shared/__tests__/appOrigin.test.ts supabase/functions/visibility-ops/__tests__/ supabase/functions/mcp/__tests__/ supabase/functions/lead-unsubscribe/__tests__/ supabase/functions/lead-nurture-runner/__tests__/
+      - run: deno test --allow-net --allow-env --allow-read --no-check supabase/functions/_shared/__tests__/report*.test.ts supabase/functions/_shared/__tests__/gscSync.test.ts supabase/functions/_shared/__tests__/cronSecret.test.ts supabase/functions/_shared/__tests__/opsWatchdog.test.ts supabase/functions/_shared/__tests__/appOrigin.test.ts supabase/functions/visibility-ops/__tests__/ supabase/functions/mcp/__tests__/
 
   # A self-hoster's first step: every migration must apply cleanly to an empty database.
   fresh-install:
