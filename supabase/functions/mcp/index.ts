@@ -735,6 +735,18 @@ async function gscLiveAccess(
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Server-log text for any thrown value: PostgREST errors are plain objects, not Error instances. */
+function describeError(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === 'object') {
+    const o = e as { code?: unknown; message?: unknown };
+    if (typeof o.message === 'string') return `${typeof o.code === 'string' ? `${o.code} ` : ''}${o.message}`;
+  }
+  return String(e);
+}
+
 async function assertSiteOwned(db: Sb, userId: string, siteId: string): Promise<boolean> {
   const { data } = await db
     .from('projects')
@@ -1143,7 +1155,10 @@ async function callTool(
           );
         }
       } catch (e) {
-        const msg = e instanceof ProjectLimitError ? e.message : e instanceof Error ? e.message : String(e);
+        // A plan limit is a user-facing message; anything else is an internal (DB) error: log it,
+        // never hand the raw text to the caller.
+        if (!(e instanceof ProjectLimitError)) console.error('[mcp] project quota check failed', e instanceof Error ? e.message : String(e));
+        const msg = e instanceof ProjectLimitError ? e.message : 'Could not check your site limit. Please try again.';
         return textResult({ error: 'quota_check_failed', message: msg }, true);
       }
 
@@ -1160,7 +1175,8 @@ async function callTool(
         .select('id, name, website_url, language, market')
         .single();
       if (createErr || !created) {
-        return textResult({ error: 'project_create_failed', message: createErr?.message ?? 'insert failed' }, true);
+        if (createErr) console.error('[mcp] project insert failed', createErr.message);
+        return textResult({ error: 'project_create_failed', message: 'Could not create the site. Please try again.' }, true);
       }
       return structuredResult({
         ...(created as Record<string, unknown>),
@@ -1817,6 +1833,10 @@ Output Markdown with a # title first.`,
       const reportId = args.report_id ? String(args.report_id) : null;
       const siteId = args.site_id ? String(args.site_id) : null;
       if (!reportId && !siteId) return textResult({ error: 'report_id_or_site_id_required' }, true);
+      // A share-link token or a typo is not an id: say so instead of failing the tool.
+      if (reportId && !UUID_RE.test(reportId)) {
+        return textResult({ error: 'report_not_found', hint: 'report_id is the "id" returned by list_client_reports' }, true);
+      }
       if (siteId && !(await assertSiteOwned(db, userId, siteId))) {
         return textResult({ error: 'site_not_found' }, true);
       }
@@ -1933,7 +1953,7 @@ Output Markdown with a # title first.`,
     return textResult({ error: 'unknown_tool', name }, true);
   } catch (e) {
     // Never echo raw PostgREST/upstream messages (table/column/constraint names) to the client.
-    console.error(`mcp tool ${name} failed:`, e instanceof Error ? e.message : String(e));
+    console.error(`mcp tool ${name} failed:`, describeError(e));
     return textResult({ error: 'tool_failed', tool: name }, true);
   }
 }
@@ -2105,7 +2125,7 @@ Deno.serve(async (req) => {
     } else {
       params = new URLSearchParams(await req.text());
     }
-    const res = await exchangeToken(params);
+    const res = await exchangeToken(params, adminClient());
     const headers = new Headers(res.headers);
     for (const [k, v] of Object.entries(cors)) headers.set(k, v);
     headers.set('Content-Type', 'application/json');

@@ -85,7 +85,7 @@ serve(async (req) => {
     return json({ authorizeUrl, redirectUri, clientName: 'Rankdelta' })
   } catch (error) {
     console.error('OAuth start error:', error)
-    return json({ error: error.message ?? 'OAuth start failed' }, 500)
+    return json({ error: 'OAuth start failed' }, 500)
   }
 })
 

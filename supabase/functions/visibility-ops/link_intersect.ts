@@ -90,8 +90,9 @@ export async function handleGetLinkIntersect(
   try {
     rows = await loadStoredRows(admin, siteDomain, normalizeDomain(competitorDomain));
   } catch (e) {
+    console.error('[visibility-ops] link_intersect: backlinks_load_failed', e instanceof Error ? e.message : String(e));
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : String(e), cost_usd: 0 }),
+      JSON.stringify({ error: 'backlinks_load_failed', cost_usd: 0 }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }

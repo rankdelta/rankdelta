@@ -192,11 +192,31 @@ Deno.serve(async (req: Request) => {
   const ipHash = await hashClientIp(clientIp)
   const supabase = createClient(Deno.env.get('SUPABASE_URL') ?? '', secretKey())
 
+  // Reserve this check's lead row BEFORE the limits are counted. The caps used to count rows that
+  // were only written at the end, after ~10-20 s of LLM calls, so a burst of parallel requests from
+  // one address (or across the day) all saw the old count and all ran paid calls. A reserved row
+  // makes every in-flight check visible to the others. If the insert fails, the lead is written at
+  // the end as before (never lost).
+  const { data: reserved } = await supabase
+    .from('public_check_leads')
+    .insert({ email, domain, ip: ipHash, api_spent: false })
+    .select('id')
+    .maybeSingle()
+  const leadId: string | null = reserved?.id ?? null
+  const notThisLead = <Q extends { neq: (col: string, val: string) => Q }>(q: Q): Q => (leadId ? q.neq('id', leadId) : q)
+  // A check refused before any work leaves no lead behind (a retry must not extend its own block).
+  const dropReservation = async () => {
+    if (leadId) await supabase.from('public_check_leads').delete().eq('id', leadId)
+  }
+
   const since = new Date(Date.now() - 3600000).toISOString()
-  const { count: ipCount } = await supabase.from('public_check_leads').select('*', { count: 'exact', head: true }).eq('ip', ipHash).gte('created_at', since)
+  const { count: ipCount } = await notThisLead(
+    supabase.from('public_check_leads').select('*', { count: 'exact', head: true }).eq('ip', ipHash).gte('created_at', since),
+  )
   // Widget: 5/h per IP. Integrations get a higher per-IP cap ("from your network" is this
   // limiter, not the LLM provider).
   if (shouldBlockOnIpCap(programmatic, ipCount ?? 0)) {
+    await dropReservation()
     return json({ error: 'rate_limited', message: 'Too many checks from your network. Please try again in a little while.' }, 429)
   }
 
@@ -213,8 +233,15 @@ Deno.serve(async (req: Request) => {
     result = cached.result
   } else {
     const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0)
-    const { count: spentToday } = await supabase.from('public_check_leads').select('*', { count: 'exact', head: true }).eq('api_spent', true).gte('created_at', dayStart.toISOString())
-    if ((spentToday ?? 0) >= DAILY_MAX) return json({ error: 'busy', message: 'We are running a lot of checks right now - try again later.' }, 503)
+    // Claim the spend first, then count: concurrent checks see each other's claims.
+    if (leadId) await supabase.from('public_check_leads').update({ api_spent: true }).eq('id', leadId)
+    const { count: spentToday } = await notThisLead(
+      supabase.from('public_check_leads').select('*', { count: 'exact', head: true }).eq('api_spent', true).gte('created_at', dayStart.toISOString()),
+    )
+    if ((spentToday ?? 0) >= DAILY_MAX) {
+      await dropReservation()
+      return json({ error: 'busy', message: 'We are running a lot of checks right now - try again later.' }, 503)
+    }
     try {
       const site = await fetchSite(domain)
       // Detect the language the SITE targets (from its own content/market), NOT the visitor's UI
@@ -251,7 +278,7 @@ Deno.serve(async (req: Request) => {
         observedLang = queryText ? await detectLanguage(queryText) : ''
         if (languageMismatch(lang, observedLang)) {
           console.warn(`ai-visibility-check wrong_language domain=${domain} requested=${lang} detected=${observedLang}`)
-          await supabase.from('public_check_leads').insert({ email, domain, ip: ipHash, api_spent: true })
+          if (!leadId) await supabase.from('public_check_leads').insert({ email, domain, ip: ipHash, api_spent: true })
           return json(wrongLanguageBody(lang, observedLang, cleanEmailText(queryText, 120)), 422)
         }
       }
@@ -296,22 +323,27 @@ Deno.serve(async (req: Request) => {
   const emailSince = new Date(Date.now() - EMAIL_WINDOW_MS).toISOString()
   const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0)
   const [recipientRes, globalEmailRes] = await Promise.all([
-    supabase.from('public_check_leads').select('*', { count: 'exact', head: true }).eq('email', email).gte('created_at', emailSince),
+    notThisLead(supabase.from('public_check_leads').select('*', { count: 'exact', head: true }).eq('email', email).gte('created_at', emailSince)),
     // The global cap protects the Resend budget from widget abuse. Exclude rows that never
     // send an email by default: the llms-txt tool ('llms-tool@internal') and programmatic
     // (integration) checks, which would otherwise count against widget visitors.
-    supabase
-      .from('public_check_leads')
-      .select('*', { count: 'exact', head: true })
-      .neq('email', 'llms-tool@internal')
-      .or('source.is.null,source.neq.programmatic')
-      .gte('created_at', dayStart.toISOString()),
+    notThisLead(
+      supabase
+        .from('public_check_leads')
+        .select('*', { count: 'exact', head: true })
+        .neq('email', 'llms-tool@internal')
+        .or('source.is.null,source.neq.programmatic')
+        .gte('created_at', dayStart.toISOString()),
+    ),
   ])
   const overRecipient = (recipientRes.count ?? 0) >= EMAIL_MAX_PER_RECIPIENT_24H
   const overGlobal = (globalEmailRes.count ?? 0) >= GLOBAL_EMAIL_DAILY_MAX
   // Widget: email caps still 429/503. Integrations still get query/level/competitors — skip the
   // Resend send instead of failing the check.
   if (shouldBlockOnEmailCap(programmatic, overRecipient, overGlobal)) {
+    // A fresh check already paid for its LLM calls: its row stays, so the per-IP and daily caps
+    // still count it (otherwise a capped email could keep running paid checks without a trace).
+    if (!apiSpent) await dropReservation()
     if (overRecipient) {
       return json({ error: 'rate_limited', message: 'Too many reports sent to this email. Please try again later.' }, 429)
     }
@@ -326,11 +358,9 @@ Deno.serve(async (req: Request) => {
     : await sendReport(email, result, result.lang || 'en')
   const emailSent = outcome.sent
   // Store the HASHED ip (data minimization); rate limiting still works because hashing is deterministic.
-  const { data: leadRow } = await supabase
-    .from('public_check_leads')
-    .insert({ email, domain, ip: ipHash, api_spent: apiSpent })
-    .select('id')
-    .maybeSingle()
+  const { data: leadRow } = leadId
+    ? await supabase.from('public_check_leads').update({ api_spent: apiSpent }).eq('id', leadId).select('id').maybeSingle()
+    : await supabase.from('public_check_leads').insert({ email, domain, ip: ipHash, api_spent: apiSpent }).select('id').maybeSingle()
   // Email outcome, language and request source in a second write: the columns arrive with a
   // migration, and a lead must never be lost because the function was deployed before it ran.
   // `source` distinguishes widget visitors ('widget') from server-to-server integrations

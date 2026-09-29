@@ -101,7 +101,8 @@ export async function handleGetContentGap(
     .eq('is_active', true);
 
   if (kwe) {
-    return new Response(JSON.stringify({ error: kwe.message, cost_usd: 0 }), {
+    console.error('[visibility-ops] keywords_load_failed', kwe.message);
+    return new Response(JSON.stringify({ error: 'keywords_load_failed', cost_usd: 0 }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -116,8 +117,9 @@ export async function handleGetContentGap(
   try {
     snapshots = await loadSnapshots(supabaseUser, keywords.map((k) => k.id));
   } catch (e) {
+    console.error('[visibility-ops] content_gap: snapshots_load_failed', e instanceof Error ? e.message : String(e));
     return new Response(
-      JSON.stringify({ error: e instanceof Error ? e.message : String(e), cost_usd: 0 }),
+      JSON.stringify({ error: 'snapshots_load_failed', cost_usd: 0 }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } },
     );
   }

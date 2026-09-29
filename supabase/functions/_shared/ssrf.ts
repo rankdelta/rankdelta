@@ -131,9 +131,52 @@ async function cloudflareLookup(hostname: string): Promise<string[] | null> {
   return [...(v4 ?? []), ...(v6 ?? [])]
 }
 
+type ResolveDns = (hostname: string, type: 'A' | 'AAAA') => Promise<string[]>
+
+function denoResolveDns(): ResolveDns | null {
+  const deno = (globalThis as { Deno?: { resolveDns?: ResolveDns } }).Deno
+  return typeof deno?.resolveDns === 'function' ? deno.resolveDns.bind(deno) : null
+}
+
+/** "No such name / no records of this type" from Deno.resolveDns: an empty answer, not a failure. */
+function isNoAnswer(e: unknown): boolean {
+  const name = (e as { name?: unknown })?.name
+  return name === 'NotFound' || /no (record|data)|nxdomain|not found/i.test(String((e as { message?: unknown })?.message ?? ''))
+}
+
+/**
+ * Resolve with the SAME resolver fetch() will use (Deno.resolveDns → the runtime's nameserver).
+ * Checking through a different resolver (DoH) than the one fetch uses let a split-horizon
+ * authoritative server answer a public IP to the checker and a private IP to fetch — a reliable
+ * rebinding with no timing needed. Falls back to Cloudflare DoH only when the runtime resolver is
+ * unavailable. (A TTL-0 rebind between this lookup and fetch's own remains possible; only
+ * platform-level egress rules can close that.)
+ */
+export function systemFirstLookup(resolve: ResolveDns | null = denoResolveDns(), fallback: DnsLookup = cloudflareLookup): DnsLookup {
+  return async (hostname: string) => {
+    if (!resolve) return fallback(hostname)
+    const one = async (type: 'A' | 'AAAA'): Promise<string[] | 'failed'> => {
+      try {
+        return await resolve(hostname, type)
+      } catch (e) {
+        return isNoAnswer(e) ? [] : 'failed'
+      }
+    }
+    const [v4, v6] = await Promise.all([one('A'), one('AAAA')])
+    if (v4 === 'failed' && v6 === 'failed') {
+      console.warn('[ssrf] runtime DNS resolver unavailable, falling back to DoH')
+      return fallback(hostname)
+    }
+    // One family failing (not "no records") is treated like the DoH path: use what answered.
+    return [...(v4 === 'failed' ? [] : v4), ...(v6 === 'failed' ? [] : v6)]
+  }
+}
+
+const defaultLookup: DnsLookup = systemFirstLookup()
+
 export async function dnsResolvesToBlocked(
   hostname: string,
-  lookup: DnsLookup = cloudflareLookup,
+  lookup: DnsLookup = defaultLookup,
 ): Promise<boolean> {
   if (isBlockedHostname(hostname)) return true
   const ips = await lookup(hostname)
@@ -141,7 +184,7 @@ export async function dnsResolvesToBlocked(
   return ips.some((ip) => isBlockedResolvedIp(ip))
 }
 
-export function cachedLookup(lookup: DnsLookup = cloudflareLookup): DnsLookup {
+export function cachedLookup(lookup: DnsLookup = defaultLookup): DnsLookup {
   const cache = new Map<string, Promise<string[] | null>>()
   return (hostname: string) => {
     const hit = cache.get(hostname)

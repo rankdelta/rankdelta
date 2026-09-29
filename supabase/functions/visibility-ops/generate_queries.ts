@@ -257,7 +257,7 @@ export async function handleGenerateQueries(
       } catch (err) {
         console.error('generate_queries chunk failed:', err);
         if (attempt >= 2) {
-          return new Response(JSON.stringify({ error: String(err) }), {
+          return new Response(JSON.stringify({ error: 'query_generation_failed' }), {
             status: 502,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           });

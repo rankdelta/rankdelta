@@ -90,7 +90,8 @@ export async function handleGetCannibalization(
     .eq('is_active', true);
 
   if (kwe) {
-    return new Response(JSON.stringify({ error: kwe.message }), {
+    console.error('[visibility-ops] keywords_load_failed', kwe.message);
+    return new Response(JSON.stringify({ error: 'keywords_load_failed' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -115,7 +116,8 @@ export async function handleGetCannibalization(
       .gte('checked_at', sinceIso)
       .order('checked_at', { ascending: false });
     if (se) {
-      return new Response(JSON.stringify({ error: se.message }), {
+      console.error('[visibility-ops] snapshots_load_failed', se.message);
+      return new Response(JSON.stringify({ error: 'snapshots_load_failed' }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

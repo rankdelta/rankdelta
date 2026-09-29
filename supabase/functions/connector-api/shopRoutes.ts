@@ -232,7 +232,10 @@ const {data: created,error } =await db
 .insert({project_id: ctx.projectId,phrase,is_active: true })
 .select('id')
 .single()
-if (error || !created) return json({error: error?.message ?? 'rank_track_failed' },500)
+if (error || !created) {
+if (error) console.error('[connector-api] rank keyword insert failed',error.message)
+return json({error: 'rank_track_failed' },500)
+}
 keywordId =created.id as string
 }
 if (targetUrl) {
@@ -327,7 +330,10 @@ moneyUrl: moneyUrl || null,
 })
 .select('id, title, slug')
 .single()
-if (error || !row) return json({error: error?.message ?? 'generate_failed' },500)
+if (error || !row) {
+if (error) console.error('[connector-api] article insert failed',error.message)
+return json({error: 'generate_failed' },500)
+}
 return json({ok: true,article: row })
 }
 if (method ==='POST' && rest ==='/v1/articles/refresh') {

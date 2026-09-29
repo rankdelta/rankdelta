@@ -66,6 +66,18 @@ function clampInt(raw: unknown, min: number, max: number): number | null {
   return Math.round(Math.min(max, Math.max(min, n)))
 }
 
+/**
+ * One row per keyword (the last one wins), sorted by keyword. Postgres refuses an upsert that
+ * touches the same row twice, and two concurrent upserts that lock overlapping rows in different
+ * orders deadlock (production, 28/09: "keyword_metrics persist failed deadlock detected" when a
+ * volume and a difficulty call for the same list ran together). A stable order prevents it.
+ */
+function uniqueSorted<T extends { keyword: string }>(rows: T[]): T[] {
+  const byKeyword = new Map<string, T>()
+  for (const r of rows) byKeyword.set(r.keyword, r)
+  return [...byKeyword.values()].sort((a, b) => (a.keyword < b.keyword ? -1 : a.keyword > b.keyword ? 1 : 0))
+}
+
 export function extractKeywordMetricRows(endpoint: string, payload: unknown, response: unknown, now = new Date()): KeywordMetricRows {
   if (endpoint !== KEYWORD_VOLUME_ENDPOINT && endpoint !== KEYWORD_DIFFICULTY_ENDPOINT) return null
   const loc = locale(payload)
@@ -80,7 +92,7 @@ export function extractKeywordMetricRows(endpoint: string, payload: unknown, res
       if (!keyword) continue
       rows.push({ keyword, ...loc, volume: clampInt((r as Json)['search_volume'], 0, 100_000_000) ?? 0, fetched_at: now.toISOString() })
     }
-    return rows.length ? { kind: 'volume', rows } : null
+    return rows.length ? { kind: 'volume', rows: uniqueSorted(rows) } : null
   }
 
   // bulk_keyword_difficulty/live: result[0].items[].keyword_difficulty.
@@ -93,5 +105,5 @@ export function extractKeywordMetricRows(endpoint: string, payload: unknown, res
     if (!keyword || difficulty == null) continue
     rows.push({ keyword, ...loc, difficulty })
   }
-  return rows.length ? { kind: 'difficulty', rows } : null
+  return rows.length ? { kind: 'difficulty', rows: uniqueSorted(rows) } : null
 }

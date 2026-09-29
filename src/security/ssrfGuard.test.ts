@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   assertSafePublicDomain,
   dnsResolvesToBlocked,
@@ -6,6 +6,7 @@ import {
   isBlockedIpv4,
   parseHttpUrl,
   resolveSafeRedirectTarget,
+  systemFirstLookup,
 } from '../../supabase/functions/_shared/ssrf';
 
 describe('isBlockedIpv4', () => {
@@ -84,3 +85,38 @@ describe('resolveSafeRedirectTarget / assertSafePublicDomain', () => {
     expect(await assertSafePublicDomain('example.com', async () => ['10.0.0.1'])).toBe(false);
   });
 });
+
+// DNS rebinding via split horizon: the guard must ask the resolver fetch() uses, not a different one.
+describe('systemFirstLookup', () => {
+  const notFound = () => Object.assign(new Error('no records found'), { name: 'NotFound' })
+
+  it('uses the runtime resolver and never asks DoH when it answers', async () => {
+    const doh = vi.fn(async () => ['93.184.216.34'])
+    const lookup = systemFirstLookup(async (_h, type) => (type === 'A' ? ['10.0.0.5'] : []), doh)
+    expect(await lookup('split.example')).toEqual(['10.0.0.5'])
+    expect(doh).not.toHaveBeenCalled()
+    expect(await dnsResolvesToBlocked('split.example', lookup)).toBe(true)
+  })
+
+  it('treats "no records" as an empty family, not a failure', async () => {
+    const lookup = systemFirstLookup(async (_h, type) => {
+      if (type === 'AAAA') throw notFound()
+      return ['93.184.216.34']
+    }, async () => ['10.0.0.5'])
+    expect(await lookup('v4only.example')).toEqual(['93.184.216.34'])
+  })
+
+  it('an unknown name resolves to nothing, which the guard blocks', async () => {
+    const lookup = systemFirstLookup(async () => { throw notFound() }, async () => ['93.184.216.34'])
+    expect(await lookup('nx.example')).toEqual([])
+    expect(await dnsResolvesToBlocked('nx.example', lookup)).toBe(true)
+  })
+
+  it('falls back to DoH only when the runtime resolver is unavailable', async () => {
+    const doh = vi.fn(async () => ['93.184.216.34'])
+    expect(await systemFirstLookup(null, doh)('a.example')).toEqual(['93.184.216.34'])
+    const broken = systemFirstLookup(async () => { throw new TypeError('resolveDns is not supported') }, doh)
+    expect(await broken('b.example')).toEqual(['93.184.216.34'])
+    expect(doh).toHaveBeenCalledTimes(2)
+  })
+})

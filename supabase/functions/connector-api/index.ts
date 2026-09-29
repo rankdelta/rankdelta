@@ -17,6 +17,7 @@
  *   after the signature verifies.
  */
 import {createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { billingIssuedAtVerdict, issuedAtRequired } from '../_shared/billingReplay.ts'
 import {userIdFromRequest } from '../_shared/jwtAuth.ts'
 import {assertProjectQuota,ProjectLimitError } from '../_shared/projectQuota.ts'
 import {
@@ -72,15 +73,8 @@ status,
 headers: {...CORS,'Content-Type': 'application/json' },
 })
 const PLAN_MAX_PROJECTS: Record<string,number> ={starter: 1,growth: 3,pro: 10,agency: -1 }
-/** /v1/entitlements/sync replay window (10 min) for the signed `issued_at` field. */
-const ENTITLEMENTS_MAX_AGE_SEC =10 * 60
-/**
- * Flip to true once the private Shopify app signs `issued_at` on every entitlements sync (it must
- * ship in lockstep — with this true, payloads without issued_at are rejected and the app's plan
- * sync breaks). Until then a missing issued_at is tolerated, but a PRESENT + stale one is always
- * rejected. Env override: ENTITLEMENTS_REQUIRE_ISSUED_AT=true.
- */
-const ENTITLEMENTS_REQUIRE_ISSUED_AT =(Deno.env.get('ENTITLEMENTS_REQUIRE_ISSUED_AT') ?? 'false').toLowerCase() ==='true'
+/** Replay window for the signed billing payload; required by default (see _shared/billingReplay.ts). */
+const ENTITLEMENTS_REQUIRE_ISSUED_AT =issuedAtRequired(Deno.env.get('ENTITLEMENTS_REQUIRE_ISSUED_AT'))
 type KeyAuth ={userId: string;keyId: string }
 async function apiKeyAuth(req: Request): Promise<KeyAuth | null> {
 const token =req.headers.get('authorization')?.replace(/^Bearer\s+/i,'') ?? ''
@@ -878,17 +872,11 @@ const billingHmac =req.headers.get('x-shopify-billing-hmac-sha256') ?? String(bo
 if (!shopifySecret || !(await verifyShopifyBillingHmac(body,billingHmac,shopifySecret))) {
 return json({error: 'billing_not_verified' },401)
 }
-// Replay window: `issued_at` (unix seconds) is part of the signed canonical string, so a captured
-// payload cannot be re-sent later to restore a cancelled plan. Always reject when present + stale.
-const issuedAtRaw =body.issued_at
-const issuedAt =typeof issuedAtRaw ==='number' ? issuedAtRaw : typeof issuedAtRaw ==='string' && issuedAtRaw !=='' ? Number(issuedAtRaw) : null
-if (issuedAt !==null) {
-if (!Number.isFinite(issuedAt) || Math.abs(Date.now() / 1000 - issuedAt) > ENTITLEMENTS_MAX_AGE_SEC) {
-return json({error: 'billing_payload_stale' },401)
-}
-} else if (ENTITLEMENTS_REQUIRE_ISSUED_AT) {
-return json({error: 'billing_issued_at_required' },401)
-}
+// Replay window: `issued_at` is signed, so a captured payload cannot be re-sent later to restore a
+// cancelled plan. A payload without it would verify forever, so it is required.
+const issuedAtVerdict =billingIssuedAtVerdict(body.issued_at,Date.now(),ENTITLEMENTS_REQUIRE_ISSUED_AT)
+if (issuedAtVerdict ==='stale') return json({error: 'billing_payload_stale' },401)
+if (issuedAtVerdict ==='required') return json({error: 'billing_issued_at_required' },401)
 const planRaw =typeof body.plan ==='string' ? body.plan : 'starter'
 if (!isShopifyPlan(planRaw)) return json({error: 'invalid_plan' },400)
 const shopifyStatus =typeof body.status ==='string' ? body.status : 'ACTIVE'
@@ -1409,7 +1397,10 @@ moneyUrl: moneyUrl || null,
 })
 .select('id, title, slug')
 .single()
-if (error || !row) return json({error: error?.message ?? 'generate_failed' },500)
+if (error || !row) {
+if (error) console.error('[connector-api] article insert failed',error.message)
+return json({error: 'generate_failed' },500)
+}
 await db.from('agent_activity').insert({
 project_id: dest.project_id,
 type: 'content_generation_requested',

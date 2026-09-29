@@ -2,15 +2,16 @@
  * Minimal OAuth 2.1 + PKCE for Claude Desktop / Cowork / claude.ai custom connectors.
  *
  * Flow: Claude discovers this AS → DCR → browser /authorize (user pastes sk_rankdelta_…)
- * → redirect with code → /token returns the same API key as access_token (Cursor/Codex
- * keep using Authorization: Bearer sk_rankdelta_… directly).
+ * → redirect with code → /token mints a NEW sk_rankdelta_ key for this connection and returns it
+ * as access_token (see mintConnectionKey). Cursor/Codex keep using Authorization: Bearer
+ * sk_rankdelta_… directly.
  *
  * Codes are AES-GCM sealed JSON (no DB). Secret: MCP_OAUTH_SECRET or derived from the Supabase
  * secret key (_shared/supabaseKeys.ts: SUPABASE_SECRET_KEYS, falling back to
  * SUPABASE_SERVICE_ROLE_KEY) — must be stable across isolates.
  */
 
-import { matchApiKeyPrefix, hashApiKey, type Sb } from '../_shared/apiKeys.ts';
+import { displayPrefix, generateApiKey, matchApiKeyPrefix, hashApiKey, type Sb } from '../_shared/apiKeys.ts';
 import { secretKey } from '../_shared/supabaseKeys.ts';
 import { appOrigin, isSelfHostEnv } from '../_shared/appOrigin.ts';
 
@@ -244,7 +245,7 @@ function rememberJti(jti: string): boolean {
   return true;
 }
 
-export async function exchangeToken(params: URLSearchParams): Promise<Response> {
+export async function exchangeToken(params: URLSearchParams, db: Sb | null = null): Promise<Response> {
   const grant = params.get('grant_type');
   if (grant !== 'authorization_code') {
     return Response.json({ error: 'unsupported_grant_type' }, { status: 400 });
@@ -275,16 +276,70 @@ export async function exchangeToken(params: URLSearchParams): Promise<Response> 
     return Response.json({ error: 'invalid_grant', error_description: 'PKCE verification failed' }, { status: 400 });
   }
 
-  // Access token = the user's personal API key — same Bearer Cursor/Codex already use.
+  // Access token = a key minted for THIS connection (revocable on its own in Settings), never the
+  // key the user pasted. Without a db (tests) the pasted key is returned as before.
+  let accessToken = payload.apiKey;
+  if (db) {
+    const minted = await mintConnectionKey(db, payload.apiKey, payload.userId, redirectUri);
+    if (!minted) return Response.json({ error: 'invalid_grant', error_description: 'API key revoked' }, { status: 400 });
+    accessToken = minted;
+  }
   return Response.json(
     {
-      access_token: payload.apiKey,
+      access_token: accessToken,
       token_type: 'bearer',
       expires_in: 365 * 24 * 60 * 60,
       scope: 'mcp:tools',
     },
     { headers: { 'Cache-Control': 'no-store' } },
   );
+}
+
+/** Same soft cap as the api-keys function (Settings). */
+const MAX_ACTIVE_KEYS = 10;
+
+/** "MCP · claude.ai" — what the user sees in Settings → API & MCP for this connection. */
+export function connectionKeyName(redirectUri: string): string {
+  let host = 'client';
+  try {
+    host = new URL(redirectUri).hostname || host;
+  } catch {
+    // keep the generic label
+  }
+  return `MCP · ${host}`.slice(0, 64);
+}
+
+/**
+ * The OAuth client used to receive the user's own pasted key: their master credential, valid for
+ * every API and revocable only by breaking every other integration. Mint a separate key per
+ * connection instead, so it shows up in Settings and can be revoked alone. Returns null when the
+ * pasted key was revoked (or belongs to someone else) since /authorize; falls back to the pasted
+ * key when a new one cannot be created (10-key cap, DB error), so connecting never breaks.
+ */
+export async function mintConnectionKey(db: Sb, pastedKey: string, userId: string, redirectUri: string): Promise<string | null> {
+  const owner = await validateApiKeyForAuthorize(db, pastedKey);
+  if (!owner || owner.userId !== userId) return null;
+  const { count, error: countErr } = await db
+    .from('api_keys')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .is('revoked_at', null);
+  if (countErr || (count ?? 0) >= MAX_ACTIVE_KEYS) {
+    console.warn('[mcp-oauth] connection key not minted, using the pasted key', countErr?.message ?? 'key limit reached');
+    return pastedKey;
+  }
+  const raw = generateApiKey();
+  const { error } = await db.from('api_keys').insert({
+    user_id: userId,
+    name: connectionKeyName(redirectUri),
+    key_prefix: displayPrefix(raw),
+    key_hash: await hashApiKey(raw),
+  } as never); // Sb is untyped (no generated schema): its insert param resolves to never
+  if (error) {
+    console.warn('[mcp-oauth] connection key insert failed, using the pasted key', error.message);
+    return pastedKey;
+  }
+  return raw;
 }
 
 export async function validateApiKeyForAuthorize(

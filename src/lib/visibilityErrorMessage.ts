@@ -24,6 +24,8 @@ export function visibilityGenerateErrorMessage(t: TFn, err: unknown): string {
 			return t('visibility.generateErrorGeneric');
 		}
 		const msg = err.message.trim();
+		// Server error codes (snake_case, e.g. query_generation_failed) are for logs, not people.
+		if (/^[a-z0-9]+(_[a-z0-9]+)+$/.test(msg)) return t('visibility.generateErrorGeneric');
 		if (msg && msg.length <= 240) return msg;
 	}
 

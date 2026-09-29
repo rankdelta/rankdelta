@@ -54,7 +54,7 @@ serve(async (req) => {
     return json({ mode: 'write', wrote: true, results, safety: { slug_changes_blocked: true, image_writes_blocked: true } })
   } catch (error) {
     console.error('Optimization error:', error)
-    return json({ error: error.message }, 500)
+    return json({ error: 'optimization_failed' }, 500)
   }
 })
 

@@ -81,7 +81,8 @@ export async function handleEnqueueSerpRankJob(
     .in('id', keywordIds)
     .eq('is_active', true);
   if (kwe) {
-    return new Response(JSON.stringify({ error: kwe.message }), {
+    console.error('[visibility-ops] keywords_load_failed', kwe.message);
+    return new Response(JSON.stringify({ error: 'keywords_load_failed' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -106,7 +107,8 @@ export async function handleEnqueueSerpRankJob(
     .single();
 
   if (je || !job) {
-    return new Response(JSON.stringify({ error: je?.message || 'Failed to create job' }), {
+    if (je) console.error('[visibility-ops] job_create_failed', je.message);
+    return new Response(JSON.stringify({ error: 'job_create_failed' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -181,7 +183,8 @@ export async function handleProcessSerpRankJob(
     .or(`status.eq.pending,and(status.eq.running,updated_at.lt.${staleCutoff})`)
     .select('id');
   if (claimErr) {
-    return new Response(JSON.stringify({ error: claimErr.message }), {
+    console.error('[visibility-ops] job_claim_failed', claimErr.message);
+    return new Response(JSON.stringify({ error: 'job_claim_failed' }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

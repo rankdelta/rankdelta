@@ -8,6 +8,7 @@ import { isPayingSubscription } from '../_shared/apiKeys.ts';
 import { isSelfHost } from '../_shared/accountBudget.ts';
 import { executeLlmMentionsRun } from './llm_mentions.ts';
 import { resumeStalledSerpRankJobs } from './serp_rank_job.ts';
+import { pickRunsToRetry, RETRY_WINDOW_MS, type RunRow } from './retry_failed.ts';
 import {
   projectSpendExceeded,
   projectSpendThisMonthCents,
@@ -364,6 +365,9 @@ export async function runNextDueProject(
     break;
   }
 
+  // Idle tick (nothing due): spend it re-running engine calls lost to a provider outage.
+  const retried = scanned ? [] : await retryTransientFailures(admin, corsHeaders);
+
   const serpResumed = await resumeStalledSerpRankJobs(admin, admin, corsHeaders);
   console.log(
     '[visibility-cron]',
@@ -371,7 +375,57 @@ export async function runNextDueProject(
       candidates: projects.length,
       scanned: scanned ? scanned['projectId'] : null,
       skipped: skipped.map((r) => ({ projectId: r['projectId'], reason: r['reason'] })),
+      retried: retried.length ? retried : undefined,
     }),
   );
-  return { candidates: projects.length, scanned, skipped, serpResumed };
+  return { candidates: projects.length, scanned, skipped, serpResumed, retried };
+}
+
+const RETRIES_PER_TICK = 4;
+
+/**
+ * Re-run the most recent engine calls that failed with a transient provider error (see
+ * retry_failed.ts), one engine per call, under the same rules as a scheduled scan: schedule on,
+ * paying (or self-host), no scan in progress, spend cap not reached.
+ */
+export async function retryTransientFailures(
+  admin: Sb,
+  corsHeaders: Record<string, string> = sharedCorsHeaders(),
+  max = RETRIES_PER_TICK,
+): Promise<Json[]> {
+  const since = new Date(Date.now() - RETRY_WINDOW_MS).toISOString();
+  const { data: rows, error } = await admin
+    .from('visibility_query_runs')
+    .select('query_id, provider, status, run_at, task_code:raw_response->tasks->0->>status_code')
+    .eq('provider', 'google_aio')
+    .gte('run_at', since)
+    .order('run_at', { ascending: false })
+    .limit(2000);
+  if (error) {
+    console.error('[visibility-cron] retry lookup failed', error.message);
+    return [];
+  }
+  const picks = pickRunsToRetry((rows ?? []) as RunRow[], max);
+  const out: Json[] = [];
+  const subscriptions = new Map<string, SubscriptionRow | null>();
+  for (const pick of picks) {
+    const { data: vq } = await admin.from('visibility_queries').select('*').eq('id', pick.queryId).maybeSingle();
+    if (!vq || (vq as Json)['is_active'] === false) continue;
+    const projectId = (vq as Json)['project_id'] as string;
+    const { data: project } = await admin.from('projects').select('*').eq('id', projectId).maybeSingle();
+    if (!project || (project as Json)['visibility_schedule_enabled'] === false) continue;
+    const userId = (project as Json)['user_id'] as string;
+    if (!subscriptions.has(userId)) subscriptions.set(userId, await loadSubscription(admin, userId));
+    if (!subscriptionAllowsScheduledScan(subscriptions.get(userId) ?? null)) continue;
+    if (await isScanInProgress(admin, project as Json)) continue;
+    const capCents = await resolveProjectSpendCapCents(admin, project as Json, userId);
+    if (projectSpendExceeded(await projectSpendThisMonthCents(admin, projectId), capCents, VISIBILITY_CHECK_ESTIMATE_CENTS)) continue;
+    const res = await executeLlmMentionsRun(
+      admin, admin, userId, vq as Json, project as Json, pick.queryId, [pick.provider],
+      clampDfsLimit(Deno.env.get('DATAFORSEO_LLM_MENTIONS_LIMIT') ?? '3', 3), 'word_match', false, corsHeaders,
+    );
+    await res.body?.cancel();
+    out.push({ queryId: pick.queryId, provider: pick.provider, httpStatus: res.status });
+  }
+  return out;
 }

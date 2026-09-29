@@ -77,6 +77,21 @@ describe('keyword cache rows come from the DataForSEO response', () => {
     })
   })
 
+  // Production 28/09: "keyword_metrics persist failed deadlock detected". Concurrent upserts must lock
+  // rows in the same order, and one upsert may not touch a row twice.
+  it('one row per keyword, in keyword order, so concurrent upserts never deadlock', () => {
+    const response = { tasks: [{ status_code: 20000, result: [
+      { keyword: 'zeta crm', search_volume: 10 },
+      { keyword: 'Alpha CRM', search_volume: 20 },
+      { keyword: 'alpha crm', search_volume: 30 },
+      { keyword: 'mid crm', search_volume: 40 },
+    ] }] }
+    const out = extractKeywordMetricRows(KEYWORD_VOLUME_ENDPOINT, payload, response, now)
+    expect(out?.rows.map((r) => [r.keyword, 'volume' in r ? r.volume : null])).toEqual([['alpha crm', 30], ['mid crm', 40], ['zeta crm', 10]])
+    const difficulty = { tasks: [{ status_code: 20000, result: [{ items: [{ keyword: 'b', keyword_difficulty: 5 }, { keyword: 'a', keyword_difficulty: 7 }, { keyword: 'b', keyword_difficulty: 9 }] }] }] }
+    expect(extractKeywordMetricRows(KEYWORD_DIFFICULTY_ENDPOINT, payload, difficulty, now)?.rows.map((r) => r.keyword)).toEqual(['a', 'b'])
+  })
+
   it('writes nothing for failed tasks, other endpoints or a payload without a valid locale', () => {
     const ok = { tasks: [{ status_code: 20000, result: [{ keyword: 'a', search_volume: 1 }] }] }
     expect(extractKeywordMetricRows(KEYWORD_VOLUME_ENDPOINT, payload, { tasks: [{ status_code: 40501, result: null }] })).toBeNull()
