@@ -68,7 +68,7 @@
     "@tremor/react": "3.18.7",
     "dayjs": "^1.11.13",
     "docx": "^9.5.1",
-    "dompurify": "^3.4.15",
+    "dompurify": "^3.4.16",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.23.24",
     "html2canvas-pro": "2.4.2",
